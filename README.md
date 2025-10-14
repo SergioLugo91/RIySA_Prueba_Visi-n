@@ -1,6 +1,6 @@
-Repositorio con el código de pruea para la visión del proyecto.
+Repositorio con el código de prueba para la parte de visión artificial del proyecto.
 Se busca:
 Hacer una estereovisión con dos cámaras.
-Detectar los arucos para delimitar el ring, y los ubots.
+Detectar los ArUcos para delimitar el ring, y los Ubots.
 
 Desarrollo: Álvaro Viña y Sergio Lugo
