@@ -26,11 +26,16 @@ else:
     inputVideo = cv2.VideoCapture(camId)
     waitTime = 10
 
-# --- Matrices de calibración (HAY QUE CALIBRAR LA CÁMARA PARA CONOCER LOS VALORES DE LA MATRIZ) ---
-camMatrix = np.array([[800, 0, 320],
-                      [0, 800, 240],
-                      [0, 0, 1]], dtype=np.float32)
-distCoeffs = np.zeros((5, 1))  # Suponer sin distorsión
+# --- CARGAR MATRICES DE CALIBRACIÓN ---
+data = np.load("Calibracion/cam_calib_data.npz")
+
+camMatrix = data["K"].astype(np.float32)
+distCoeffs = data["D"].astype(np.float32)
+
+print("Matriz de calibración cargada:")
+print(camMatrix)
+print("Coeficientes de distorsión:")
+print(distCoeffs.ravel())
 
 # --- Definir el sistema de coordenadas del marcador ---
 objPoints = np.array([
