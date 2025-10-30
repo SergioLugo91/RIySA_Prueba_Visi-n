@@ -2,13 +2,41 @@ import numpy as np
 import cv2
 import glob
 import os
+import time
+
+#===== Captura de datos ======
+
+CAM_INDEX = 0          
+RESOLUTION = (1280,720) # ajusta a tu cámara
+SAVE_DIR = "Calibracion/CaptCalib"      # carpeta de salida
+
+os.makedirs(SAVE_DIR, exist_ok=True)
+
+cap = cv2.VideoCapture(CAM_INDEX,cv2.CAP_DSHOW)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH,  RESOLUTION[0])
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, RESOLUTION[1])
+print("Pulsa [SPACE] para guardar, [ESC] para salir.")
+
+i = 0
+while True:
+    ok, frame = cap.read()
+    if not ok: continue
+    cv2.imshow("Vista previa (tablero a la vista)", frame)
+    k = cv2.waitKey(1) & 0xFF
+    if k == 27: break            # ESC
+    if k == 32:                  # SPACE
+        fname = os.path.join(SAVE_DIR, f"img_{i:03d}.png")
+        cv2.imwrite(fname, frame)
+        print("Guardada:", fname); i += 1; time.sleep(0.2)
+
+cap.release(); cv2.destroyAllWindows()
 
 # === CONFIGURACIÓN DEL TABLERO ===
 CHESSBOARD = (7, 7)        # número de esquinas interiores (col x fil)
 SQUARE_SIZE = 32.0         # tamaño del cuadro en milímetros (3.3 cm)
 
 # === CARPETA DE IMÁGENES ===
-IMG_DIR = "CaptCalib"
+IMG_DIR = "Calibracion/CaptCalib"
 
 # === PREPARACIÓN DE LOS PUNTOS 3D DEL TABLERO (plano Z=0) ===
 objp = np.zeros((CHESSBOARD[0]*CHESSBOARD[1], 3), np.float32)
