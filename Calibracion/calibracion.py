@@ -6,7 +6,7 @@ import time
 
 #===== Captura de datos ======
 
-CAM_INDEX = 0          
+CAM_INDEX = 0         
 RESOLUTION = (1280,720) # ajusta a tu cámara
 SAVE_DIR = "Calibracion/CaptCalib"      # carpeta de salida
 
@@ -90,7 +90,7 @@ print("Coeficientes de distorsión D:")
 print(D.ravel())
 
 # === GUARDA LOS RESULTADOS ===
-np.savez("cam_calib_data.npz", K=K, D=D, rms=ret)
+np.savez("Calibracion/cam_calib_data.npz", K=K, D=D, rms=ret)
 
 # === PRUEBA VISUAL ===
 test_img = cv2.imread(images[0])
