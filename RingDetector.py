@@ -33,7 +33,7 @@ def img_to_world(Hmat, u, v):
 
 # --- Configuración inicial ---
 video = ""       # Si pones una ruta de vídeo, se usará ese archivo; vacío => cámara.
-camId = 1        # Índice de cámara (0 suele ser la predeterminada).
+camId = 0        # Índice de cámara (0 suele ser la predeterminada).
 target_fps = 30.0
 frame_period = 1.0 / target_fps  # Periodo de fotogramas (~0.033 s).
 
@@ -56,7 +56,7 @@ detectorParams = cv2.aruco.DetectorParameters()   # Parámetros por defecto.
 detector = cv2.aruco.ArucoDetector(dictionary, detectorParams)  # Detector moderno (OpenCV >= 4.7).
 
 # --- Abrir el video o la cámara ---
-inputVideo = cv2.VideoCapture(video if video else camId, cv2.CAP_DSHOW)  # CAP_DSHOW: backend DirectShow en Windows.
+inputVideo = cv2.VideoCapture(camId, cv2.CAP_DSHOW)  # CAP_DSHOW: backend DirectShow en Windows.
 
 # --- CARGAR MATRICES DE CALIBRACIÓN ---
 data = np.load("Calibracion/cam_calib_data.npz")     # Carga archivo .npz con K y D.

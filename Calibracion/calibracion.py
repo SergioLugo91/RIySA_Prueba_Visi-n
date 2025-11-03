@@ -8,7 +8,7 @@ import time
 
 CAM_INDEX = 0         
 RESOLUTION = (1280,720) # ajusta a tu cámara
-SAVE_DIR = "Calibracion/CaptCalib"      # carpeta de salida
+SAVE_DIR = "Calibracion/CaptCalibCamSergio"      # carpeta de salida
 
 os.makedirs(SAVE_DIR, exist_ok=True)
 

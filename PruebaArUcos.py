@@ -3,6 +3,21 @@ import numpy as np
 import time
 import itertools
 import math
+import serial
+from dataclasses import dataclass
+import socket
+
+
+
+# --- Configuración WIFI ---
+IP = "255.255.255.255"
+PORT = 8888
+
+datos_robots = []
+
+def enviarDatos(sock, msg, ip, port):
+    sock.sendto(msg.encode(), (ip, port))
+    print(f"[Enviado -> {ip}:{port}] {msg}")
 
 # --- Configuración inicial ---
 video = ""       # ruta de video, o dejar vacío para usar cámara
@@ -10,8 +25,11 @@ camId = 0        # ID de cámara (0 = cámara predeterminada)
 markerLength = 0.025  # longitud del marcador en metros
 estimatePose = True
 showRejected = True
-target_fps = 30.0
+target_fps = 1.0
 frame_period = 1.0 / target_fps  # ~0.033 segundos
+#ser = serial.Serial()
+#ser.baudrate = 19200
+#ser.port = 'COM1'
 
 # --- Crear el diccionario y los parámetros del detector ---
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250)
@@ -59,8 +77,78 @@ def rotationMatrixToEulerAngles(R):
         z = 0
     return np.degrees([x, y, z])  # roll, pitch, yaw
 
+# --- Función auxiliar: obtener matriz RT 4x4 ---
+def getRTMatrix(R_, T_, forceType=-1):
+    M = None
+    R = R_.copy()
+    T = T_.copy()
+    
+    if R.dtype == np.float64:
+        assert T.dtype == np.float64
+        Matrix = np.eye(4, dtype=np.float64)
+        R33 = Matrix[0:3, 0:3]
+        
+        if R.size == 3:
+            R33[:,:] = cv2.Rodrigues(R)[0]
+        elif R.size == 9:
+            R64 = R.astype(np.float64)
+            R33[:,:] = R64.reshape(3, 3)
+        
+        for i in range(3):
+            Matrix[i, 3] = T.flat[i] if T.ndim > 1 else T[i]
+        M = Matrix
+        
+    elif R.dtype == np.float32:
+        Matrix = np.eye(4, dtype=np.float32)
+        R33 = Matrix[0:3, 0:3]
+        
+        if R.size == 3:
+            R33[:,:] = cv2.Rodrigues(R)[0]
+        elif R.size == 9:
+            R32 = R.astype(np.float32)
+            R33[:,:] = R32.reshape(3, 3)
+        
+        for i in range(3):
+            Matrix[i, 3] = T.flat[i] if T.ndim > 1 else T[i]
+        M = Matrix
+    
+    if forceType == -1:
+        return M
+    else:
+        MTyped = M.astype(forceType)
+        return MTyped
+    
+
+# --- Función para calcular distancia 3D entre dos marcadores ---
+def calculate_distance_between_markers(tvec1, tvec2):
+    """ Calcula la distancia 3D en metros entre dos marcadores usando sus poses """
+    # Convertir los vectores de traslación a coordenadas 3D
+    pos1 = tvec1.flatten()
+    pos2 = tvec2.flatten()
+    
+    # Calcular distancia euclidiana en metros
+    distance = np.linalg.norm(pos1 - pos2)
+    return distance
+
+# --- Función para normalizar ángulo a [-180, 180] grados ---
+def normalize_angle_deg(a):
+    return ((a + 180) % 360) - 180
+
 # --- Control de pares ---
 current_pair_index = 0
+
+# --- Clase de datos Ubot ---
+@dataclass
+class Ubot:
+    id: int
+    ang: float
+    dist: float
+    Out: int
+
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+sock.bind(("", PORT))
 
 # --- Bucle principal ---
 while True:
@@ -69,11 +157,11 @@ while True:
     ret, image = inputVideo.read()
     if not ret:
         break
-
+    
     imageCopy = image.copy()
     corners, ids, rejected = detector.detectMarkers(image)
 
-    marker_data = {}  # {id: {"center": (x, y), "yaw": val}}
+    marker_data = {}  # {id: {"center": (x, y), "rvec": rvec, "tvec": tvec, "corners": c}}
 
     if ids is not None:
         cv2.aruco.drawDetectedMarkers(imageCopy, corners, ids)
@@ -87,56 +175,117 @@ while True:
             if not success:
                 continue
 
-            # Convertir rotación a yaw
-            R, _ = cv2.Rodrigues(rvec)
-            roll, pitch, yaw = rotationMatrixToEulerAngles(R)
-
             # Guardar datos
-            marker_data[marker_id] = {"center": (center_x, center_y), "yaw": yaw}
+            marker_data[marker_id] = {
+                "center": (center_x, center_y),
+                "rvec": rvec,
+                "tvec": tvec,
+                "corners": c
+            }
 
             # Dibujar ejes y yaw en la imagen
             cv2.drawFrameAxes(imageCopy, camMatrix, distCoeffs, rvec, tvec, markerLength * 1.5)
-            cv2.putText(imageCopy, f"yaw={yaw:.1f}", (center_x - 40, center_y - 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
 
-    # --- Agrupar en pares excluyentes ---
+    # --- Agrupar en pares excluyendo el marcador base ---
     sorted_ids = sorted(marker_data.keys())
-    paired_ids = [sorted_ids[i:i+2] for i in range(0, len(sorted_ids), 2)]
+
+    # --- Identificar marcador base (el de ID más bajo) ---
+    id_base = None
+    if len(sorted_ids) != 0:
+        id_base = sorted_ids[0]
+        pBase = marker_data[id_base]["center"]
+        rvecBase = marker_data[id_base]["rvec"]
+        tvecBase = marker_data[id_base]["tvec"]
+
+    # --- Preparar pares ---
+    others = sorted_ids[1:]  # excluye el base
+    paired_ids = [others[i:i+2] for i in range(0, len(others), 2)]
     num_pairs = len(paired_ids)
 
     # --- Dibujar solo el par actual ---
-    if 0 <= current_pair_index < num_pairs:
+    if id_base is not None and 0 <= current_pair_index < num_pairs:
         pair = paired_ids[current_pair_index]
         if len(pair) == 2:
             idA, idB = pair
+            # --- Obtener datos de los marcadores A y B ---
+            rvecA = marker_data[idA]["rvec"]
+            tvecA = marker_data[idA]["tvec"]
+            rvecB = marker_data[idB]["rvec"]
+            tvecB = marker_data[idB]["tvec"]
+
+            # --- Construir matrices RT 4x4 (marker -> camera) ---
+            M_base = getRTMatrix(rvecBase, tvecBase)   # base -> camera
+            M_A = getRTMatrix(rvecA, tvecA)            # A -> camera
+            M_B = getRTMatrix(rvecB, tvecB)            # B -> camera
+
+            # --- Transformar las poses de A y B al sistema del marcador base ---
+            # Queremos M_{X->base} = inv(M_base) @ M_X
+            M_base_inv = np.linalg.inv(M_base)
+
+            M_A_in_base = M_base_inv @ M_A
+            M_B_in_base = M_base_inv @ M_B
+
+            # --- Extraer vectores de traslación (3x1) en sistema base ---
+            tA_in_base = M_A_in_base[0:3, 3].reshape(3, 1)
+            tB_in_base = M_B_in_base[0:3, 3].reshape(3, 1)
+
+            # --- Extraer matrices de rotación (3x3) en sistema base ---
+            RA_in_base = M_A_in_base[0:3, 0:3]
+            RB_in_base = M_B_in_base[0:3, 0:3]
+
+            # --- Convertir matrices de rotación a ángulos de Euler ---
+            roll_A, pitch_A, yaw_A = rotationMatrixToEulerAngles(RA_in_base)
+            roll_B, pitch_B, yaw_B = rotationMatrixToEulerAngles(RB_in_base)
+
+            # --- DEBUG: imprimir posiciones y yaw ---
+            print("--------------------------------------------------")
+            print(f"Par detectado: {idA} y {idB}")
+            print(f"Posición de {idA} en sistema base: {tA_in_base.flatten()}")
+            print(f"Posición de {idB} en sistema base: {tB_in_base.flatten()}")
+            print(f"Yaw de {idA} en sistema base: {yaw_A:.2f}°")
+            print(f"Yaw de {idB} en sistema base: {yaw_B:.2f}°")
+            print("--------------------------------------------------")
+
+            # --- Posiciones de los marcadores en metros ---
+            distancia = calculate_distance_between_markers(tA_in_base,tB_in_base)
+
+            # --- Ángulo de A hacia B en el plano XY del sistema base ---
+            dx_AB = float(tB_in_base[0] - tA_in_base[0])  # diferencia en X (m)
+            dy_AB = float(tB_in_base[1] - tA_in_base[1])  # diferencia en Y (m)
+            angle_AB = math.degrees(math.atan2(dy_AB, dx_AB))  # grados, [-180,180]
+            delta_A = normalize_angle_deg(angle_AB - yaw_A) # diferencia con yaw_A
+
+            # --- Ángulo de B hacia A ---
+            dx_BA = -dx_AB
+            dy_BA = -dy_AB
+            angle_BA = math.degrees(math.atan2(dy_BA, dx_BA))
+            delta_B = normalize_angle_deg(angle_BA - yaw_B)
+
+            # --- Crear objetos Ubot ---
+            delta_A = round(delta_A,3)
+            delta_B = round(delta_B,3)
+            distancia = round(distancia,3)
+            ubot_pair_A = Ubot(id=idA, ang=float(delta_A), dist=float(distancia), Out=0)
+            enviarDatos(sock, str(ubot_pair_A), IP, PORT)
+            ubot_pair_B = Ubot(id=idB, ang=float(delta_B), dist=float(distancia), Out=0)
+            enviarDatos(sock, str(ubot_pair_B), IP, PORT)
+            
+            # --- Dibujar información en la imagen ---
             pA = marker_data[idA]["center"]
             pB = marker_data[idB]["center"]
-            yawA = marker_data[idA]["yaw"]
-            yawB = marker_data[idB]["yaw"]
-
-            # Ángulo desde A hacia B
-            dx_AB = pB[0] - pA[0]
-            dy_AB = pA[1] - pB[1]
-            angle_AB = (math.degrees(math.atan2(dx_AB, dy_AB)) + 360) % 360
-            delta_A = (angle_AB - yawA + 180) % 360 - 180
-
-            # Ángulo desde B hacia A
-            dx_BA = pA[0] - pB[0]
-            dy_BA = pB[1] - pA[1]
-            angle_BA = (math.degrees(math.atan2(dx_BA, dy_BA)) + 360) % 360
-            delta_B = (angle_BA - yawB + 180) % 360 - 180
-
             mid = ((pA[0]+pB[0])//2, (pA[1]+pB[1])//2)
+
             cv2.line(imageCopy, pA, pB, (0, 0, 255), 2)
-            cv2.putText(imageCopy, f"{idA}-->{idB}: {delta_A:.1f}", (mid[0]-70, mid[1]-10),
+            cv2.putText(imageCopy, f"{idA}->{idB}: {delta_A:.1f} deg", (mid[0]-70, mid[1]-10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-            cv2.putText(imageCopy, f"{idB}-->{idA}: {delta_B:.1f}", (mid[0]-70, mid[1]+20),
+            cv2.putText(imageCopy, f"Dist:{distancia*100:.1f} cm", (mid[0]-70, mid[1]-30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            cv2.putText(imageCopy, f"{idB}->{idA}: {delta_B:.1f} deg", (mid[0]-70, mid[1]+20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+            cv2.putText(imageCopy, f"Dist:{distancia*100:.1f} cm", (mid[0]-70, mid[1]+40),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
-            print(f"[PAIR {idA}-{idB}] delta_A = {delta_A:.1f}°, delta_B = {delta_B:.1f}°")
-
-    #if showRejected and len(rejected) > 0:
-    #    cv2.aruco.drawDetectedMarkers(imageCopy, rejected, borderColor=(100, 0, 255))
+            print(f"[PAIR {idA}-{idB}] delta_A = {delta_A:.1f}°, delta_B = {delta_B:.1f}°, dist = {distancia:.3f} m")
 
     cv2.imshow("Control de Pares (A / D)", imageCopy)
 
