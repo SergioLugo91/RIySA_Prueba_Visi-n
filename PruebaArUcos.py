@@ -15,6 +15,10 @@ PORT = 8888
 
 datos_robots = []
 
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+sock.bind(("", PORT))
+
 def enviarDatos(sock, msg, ip, port):
     sock.sendto(msg.encode(), (ip, port))
     print(f"[Enviado -> {ip}:{port}] {msg}")
@@ -25,7 +29,7 @@ camId = 0        # ID de cámara (0 = cámara predeterminada)
 markerLength = 0.025  # longitud del marcador en metros
 estimatePose = True
 showRejected = True
-target_fps = 1.0
+target_fps = 30.0
 frame_period = 1.0 / target_fps  # ~0.033 segundos
 #ser = serial.Serial()
 #ser.baudrate = 19200
@@ -145,11 +149,6 @@ class Ubot:
     dist: float
     Out: int
 
-
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-sock.bind(("", PORT))
-
 # --- Bucle principal ---
 while True:
     loop_start = time.time()
@@ -237,29 +236,52 @@ while True:
             roll_A, pitch_A, yaw_A = rotationMatrixToEulerAngles(RA_in_base)
             roll_B, pitch_B, yaw_B = rotationMatrixToEulerAngles(RB_in_base)
 
-            # --- DEBUG: imprimir posiciones y yaw ---
+            # --- Posiciones de A y B en coordenadas del marcador base ---
+            pos_A = M_A_in_base[0:3, 3]
+            pos_B = M_B_in_base[0:3, 3]
+            v_AB = pos_B - pos_A  # vector A -> B
+
+            n_A = M_A_in_base[0:3, 2]  # eje +Z local (normal) de A en sistema base
+            n_B = M_B_in_base[0:3, 2]  # eje +Z local (normal) de B en sistema base
+
+            # --- Proyecciones de las normales y del vector de conexión en el plano XY ---
+            nA_xy = np.array([n_A[0], n_A[1], 0.0])
+            nB_xy = np.array([n_B[0], n_B[1], 0.0])
+            vAB_xy = np.array([v_AB[0], v_AB[1], 0.0])
+            vBA_xy = -vAB_xy
+
+            # --- Normalizar vectores y evitar divisiones por cero ---
+            def safe_norm(v):
+                n = np.linalg.norm(v)
+                return v / n if n > 1e-8 else v * 0.0
+
+            nA_xy = safe_norm(nA_xy)
+            nB_xy = safe_norm(nB_xy)
+            vAB_xy = safe_norm(vAB_xy)
+            vBA_xy = safe_norm(vBA_xy)
+
+            # --- Ángulos (azimut) de cada vector ---
+            az_nA = math.atan2(nA_xy[1], nA_xy[0])
+            az_vAB = math.atan2(vAB_xy[1], vAB_xy[0])
+            az_nB = math.atan2(nB_xy[1], nB_xy[0])
+            az_vBA = math.atan2(vBA_xy[1], vBA_xy[0])
+
+            # --- Diferencia angular en grados (cuánto girar en yaw global) ---
+            delta_A = normalize_angle_deg(math.degrees(az_vAB - az_nA))
+            delta_B = normalize_angle_deg(math.degrees(az_vBA - az_nB))
+
+            # --- Distancia entre A y B en el sistema base ---
+            distancia = calculate_distance_between_markers(tA_in_base, tB_in_base)
+
+            # --- DEBUG: imprimir resultados ---
             print("--------------------------------------------------")
-            print(f"Par detectado: {idA} y {idB}")
-            print(f"Posición de {idA} en sistema base: {tA_in_base.flatten()}")
-            print(f"Posición de {idB} en sistema base: {tB_in_base.flatten()}")
-            print(f"Yaw de {idA} en sistema base: {yaw_A:.2f}°")
-            print(f"Yaw de {idB} en sistema base: {yaw_B:.2f}°")
+            print(f"[PAIR {idA}-{idB}]")
+            print(f"Posición A (en base): {pos_A}")
+            print(f"Posición B (en base): {pos_B}")
+            print(f"Ángulo de A hacia B (en su plano): {delta_A:.2f}°")
+            print(f"Ángulo de B hacia A (en su plano): {delta_B:.2f}°")
+            print(f"Distancia: {distancia:.3f} m")
             print("--------------------------------------------------")
-
-            # --- Posiciones de los marcadores en metros ---
-            distancia = calculate_distance_between_markers(tA_in_base,tB_in_base)
-
-            # --- Ángulo de A hacia B en el plano XY del sistema base ---
-            dx_AB = float(tB_in_base[0] - tA_in_base[0])  # diferencia en X (m)
-            dy_AB = float(tB_in_base[1] - tA_in_base[1])  # diferencia en Y (m)
-            angle_AB = math.degrees(math.atan2(dy_AB, dx_AB))  # grados, [-180,180]
-            delta_A = normalize_angle_deg(angle_AB - yaw_A) # diferencia con yaw_A
-
-            # --- Ángulo de B hacia A ---
-            dx_BA = -dx_AB
-            dy_BA = -dy_AB
-            angle_BA = math.degrees(math.atan2(dy_BA, dx_BA))
-            delta_B = normalize_angle_deg(angle_BA - yaw_B)
 
             # --- Crear objetos Ubot ---
             delta_A = round(delta_A,3)
