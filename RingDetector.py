@@ -123,7 +123,7 @@ def img_to_world(Hmat, u, v):
 
 # --- Configuración inicial ---
 video = ""       # Si pones una ruta de vídeo, se usará ese archivo; vacío => cámara.
-camId = 0        # Índice de cámara (0 suele ser la predeterminada).
+camId = 1       # Índice de cámara (0 suele ser la predeterminada).
 target_fps = 30.0
 frame_period = 1.0 / target_fps  # Periodo de fotogramas (~0.033 s).
 
