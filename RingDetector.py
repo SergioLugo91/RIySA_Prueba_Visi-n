@@ -133,16 +133,16 @@ frame_period = 1.0 / target_fps  # Periodo de fotogramas (~0.033 s).
 
 # ==== GEOMETRÍA DEL RING (en metros) ====
 WIDTH, HEIGHT = 0.80, 0.80     # Ancho y alto del ring en metros.
-marker_len = 0.087             # Lado físico del ArUco en metros.
+marker_len = 0.09             # Lado físico del ArUco en metros.
 
 # IDs de tus dos marcadores (ajústalos a los que imprimas).
 ID_A = 0   # Marcador cerca de la esquina (0,0).
 ID_B = 1   # Marcador cerca de la esquina (W,H).
 
-# Offsets hacia el interior desde cada esquina (metros).
+# Offsets hacia el EXTERIOR desde cada esquina (metros).
 # Convención 2D: +x a la derecha, +y hacia abajo.
-ox_A, oy_A = 0.02, 0.02
-ox_B, oy_B = 0.02, 0.02
+ox_A, oy_A = 0.0, 0.03
+ox_B, oy_B = 0, 0.05
 
 # Offsets hacia el EXTERIOR desde cada esquina (metros).
 # Convención 2D: +x a la derecha, +y hacia abajo.
