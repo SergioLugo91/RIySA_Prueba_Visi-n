@@ -142,7 +142,7 @@ ID_B = 1   # Marcador cerca de la esquina (W,H).
 # Offsets hacia el EXTERIOR desde cada esquina (metros).
 # Convención 2D: +x a la derecha, +y hacia abajo.
 ox_A, oy_A = 0.0, 0.03
-ox_B, oy_B = 0, 0.05
+ox_B, oy_B = 0.0, 0.05
 
 # Offsets hacia el EXTERIOR desde cada esquina (metros).
 # Convención 2D: +x a la derecha, +y hacia abajo.
