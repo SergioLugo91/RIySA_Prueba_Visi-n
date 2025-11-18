@@ -1,7 +1,5 @@
 import cv2
 import numpy as np
-import time
-import itertools
 import math
 import serial
 from dataclasses import dataclass
@@ -148,6 +146,179 @@ class Ubot:
     ang: float
     dist: float
     Out: int
+
+# --- Clase ArucoRobotDetector ---
+class ArucoRobotDetector:
+    """Detector de robots usando pares de ArUcos"""
+    
+    def __init__(self, robot_markers=None, marker_length=0.025,
+                 calibration_path="Calibracion/cam_calib_data.npz"):
+        # Configuración por defecto
+        if robot_markers is None:
+            self.robot_markers = {
+                1: [2, 3],
+                2: [4, 5],
+                3: [6, 7],
+                4: [8, 9]
+            }
+        else:
+            self.robot_markers = robot_markers
+        
+        self.marker_length = marker_length
+        
+        # Detector ArUco
+        self.dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250)
+        self.params = cv2.aruco.DetectorParameters()
+        self.detector = cv2.aruco.ArucoDetector(self.dictionary, self.params)
+        
+        # Calibración
+        data = np.load(calibration_path)
+        self.cam_matrix = data["K"].astype(np.float32)
+        self.dist_coeffs = data["D"].astype(np.float32)
+        
+        # Puntos 3D del marcador
+        self.obj_points = np.array([
+            [-marker_length/2, marker_length/2, 0],
+            [marker_length/2, marker_length/2, 0],
+            [marker_length/2, -marker_length/2, 0],
+            [-marker_length/2, -marker_length/2, 0]
+        ], dtype=np.float32)
+        
+        print("ArucoRobotDetector: Calibración cargada")
+    
+    @staticmethod
+    def calculate_distance(tvec1, tvec2):
+        """Calcula distancia 3D entre dos posiciones"""
+        return np.linalg.norm(tvec1.flatten() - tvec2.flatten())
+    
+    @staticmethod
+    def calculate_angle(tvec1, tvec2):
+        """Calcula ángulo relativo entre dos posiciones"""
+        delta = tvec2.flatten() - tvec1.flatten()
+        return math.degrees(math.atan2(delta[1], delta[0]))
+    
+    def process_frame(self, frame):
+        """
+        Procesa un frame y detecta robots.
+        
+        Returns:
+            dict: {
+                'frame': frame procesado,
+                'markers': lista de marcadores detectados,
+                'robots': {robot_id: {'center': (x,y), 'tvec': tvec, 'marker_ids': [id1, id2]}},
+                'pairs': [{'r1': id, 'r2': id, 'dist': float, 'ang': float}]
+            }
+        """
+        corners, ids, _ = self.detector.detectMarkers(frame)
+        
+        result = {
+            'frame': frame.copy(),
+            'markers': [],
+            'robots': {},
+            'pairs': []
+        }
+        
+        if ids is None:
+            return result
+        
+        # Dibujar marcadores
+        cv2.aruco.drawDetectedMarkers(result['frame'], corners, ids)
+        
+        # Detectar cada marcador y calcular pose
+        markers_dict = {}
+        for i, c in enumerate(corners):
+            marker_id = int(ids[i][0])
+            center = c[0].mean(axis=0)
+            
+            success, rvec, tvec = cv2.solvePnP(self.obj_points, c, 
+                                               self.cam_matrix, self.dist_coeffs)
+            if success:
+                markers_dict[marker_id] = {
+                    'corners': c,
+                    'center': tuple(center.astype(int)),
+                    'rvec': rvec,
+                    'tvec': tvec
+                }
+                
+                # Dibujar ejes
+                cv2.drawFrameAxes(result['frame'], self.cam_matrix, self.dist_coeffs,
+                                 rvec, tvec, self.marker_length * 1.5)
+        
+        result['markers'] = list(markers_dict.keys())
+        
+        # Procesar robots (cada robot tiene 2 marcadores)
+        for robot_id, marker_ids in self.robot_markers.items():
+            if all(mid in markers_dict for mid in marker_ids):
+                m1 = markers_dict[marker_ids[0]]
+                m2 = markers_dict[marker_ids[1]]
+                
+                # Centro promedio
+                cx = int((m1['center'][0] + m2['center'][0]) / 2)
+                cy = int((m1['center'][1] + m2['center'][1]) / 2)
+                tvec_avg = (m1['tvec'] + m2['tvec']) / 2
+                
+                result['robots'][robot_id] = {
+                    'center': (cx, cy),
+                    'tvec': tvec_avg,
+                    'marker_ids': marker_ids
+                }
+                
+                # Dibujar robot
+                cv2.circle(result['frame'], (cx, cy), 10, (0, 255, 0), -1)
+                cv2.putText(result['frame'], f"R{robot_id}", (cx + 15, cy - 15),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        
+        # Calcular distancias y ángulos entre robots
+        robot_ids = list(result['robots'].keys())
+        for i in range(len(robot_ids)):
+            for j in range(i + 1, len(robot_ids)):
+                r1 = robot_ids[i]
+                r2 = robot_ids[j]
+                
+                tvec1 = result['robots'][r1]['tvec']
+                tvec2 = result['robots'][r2]['tvec']
+                
+                dist = self.calculate_distance(tvec1, tvec2)
+                ang = self.calculate_angle(tvec1, tvec2)
+                
+                result['pairs'].append({
+                    'r1': r1,
+                    'r2': r2,
+                    'dist': dist,
+                    'ang': ang
+                })
+                
+                # Dibujar línea entre robots
+                pt1 = result['robots'][r1]['center']
+                pt2 = result['robots'][r2]['center']
+                cv2.line(result['frame'], pt1, pt2, (255, 255, 0), 2)
+                
+                mid_x = (pt1[0] + pt2[0]) // 2
+                mid_y = (pt1[1] + pt2[1]) // 2
+                cv2.putText(result['frame'], f"D:{dist*100:.1f}cm A:{ang:.1f}°",
+                           (mid_x, mid_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+        
+        return result
+
+
+# Si se ejecuta directamente
+if __name__ == "__main__":
+    detector = ArucoRobotDetector()
+    cap = cv2.VideoCapture(0)
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        result = detector.process_frame(frame)
+        cv2.imshow("Robot Detector", result['frame'])
+        
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+    
+    cap.release()
+    cv2.destroyAllWindows()
 
 # --- Bucle principal ---
 while True:
