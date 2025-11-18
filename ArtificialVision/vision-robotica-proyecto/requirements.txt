@@ -1,0 +1,6 @@
+opencv-python
+numpy
+dataclasses
+socket
+serial
+```
