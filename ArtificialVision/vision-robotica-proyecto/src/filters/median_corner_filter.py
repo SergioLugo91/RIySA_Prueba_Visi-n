@@ -1,3 +1,6 @@
+import numpy as np
+from collections import deque
+
 class MedianCornerFilter:
     """
     Clase que almacena las últimas N muestras de las esquinas del cuadrado
@@ -29,7 +32,8 @@ class MedianCornerFilter:
         """
         if corners is not None and len(corners) == 4:
             self.buffer.append(corners.copy())
-            self.frames_without_detection = 0  # Resetea el contador
+            self.last_known_corners = corners.copy()
+            self.frames_without_detection = 0
     
     def get_median_corners(self):
         """
@@ -41,24 +45,20 @@ class MedianCornerFilter:
                         o el último valor conocido, o None si nunca hubo detección.
         """
         if len(self.buffer) > 0:
-            # Convierte el buffer a un array 3D: (num_muestras, 4_esquinas, 2_coords)
-            samples = np.array(list(self.buffer))
-            
-            # Calcula la mediana a lo largo del eje de las muestras (eje 0)
-            median_corners = np.median(samples, axis=0).astype(np.float32)
-            
-            # Actualiza el último valor conocido
-            self.last_known_corners = median_corners.copy()
-            
-            return median_corners
+            # Hay muestras recientes: calcular la mediana
+            stacked = np.array(list(self.buffer))  # Shape: (N, 4, 2)
+            median = np.median(stacked, axis=0)    # Shape: (4, 2)
+            return median.astype(np.float32)
         else:
-            # No hay muestras nuevas, devuelve el último valor conocido
+            # No hay muestras nuevas
             self.frames_without_detection += 1
             
-            # Opcionalmente, resetea si pasa mucho tiempo sin detección
+            # Si han pasado demasiados frames sin detección, resetear
             if self.frames_without_detection > self.max_frames_without_detection:
                 self.last_known_corners = None
-                
+                return None
+            
+            # Devolver el último valor conocido
             return self.last_known_corners
     
     def is_ready(self):
