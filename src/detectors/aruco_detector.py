@@ -19,7 +19,7 @@ class ArUcoDetector:
     - Gestión de robots con dos marcadores cada uno
     - Cálculo de distancia y ángulo entre robots
     """
-    def __init__(self, marker_length=0.025, cam_id=0, target_fps=30.0,
+    def __init__(self, marker_length=0.05, cam_id=0, target_fps=30.0,
                  calibration_path="calibracion/cam_calib_data.npz",
                  aruco_dict=cv2.aruco.DICT_6X6_250,
                  robot_markers=None):
@@ -97,60 +97,35 @@ class ArUcoDetector:
         """
         corners, ids, rejected = self.detector.detectMarkers(image)
         markers = []
-        
+        base_marker = None
+
         if ids is not None:
             for i, c in enumerate(corners):
                 marker_id = int(ids[i][0])
                 center_x = int(np.mean(c[0][:, 0]))
                 center_y = int(np.mean(c[0][:, 1]))
-                
+
                 # Calcular pose del marcador
                 success, rvec, tvec = cv2.solvePnP(
                     self.obj_points, c, self.cam_matrix, self.dist_coeffs
                 )
-                
+
                 if success:
-                    markers.append(Marker(
+                    m = Marker(
                         id=marker_id,
                         corners=c,
                         center=(center_x, center_y),
                         rvec=rvec,
                         tvec=tvec
-                    ))
-        
-        return markers
+                    )
+                    markers.append(m)
 
-    def get_robot_center(self, markers_dict, robot_id):
-        """
-        Calcula el centro de un robot usando sus dos marcadores.
-        
-        Args:
-            markers_dict: Diccionario {marker_id: Marker}
-            robot_id: ID del robot
-            
-        Returns:
-            tuple: (center_x, center_y, tvec_avg) o None si no se detectan ambos marcadores
-        """
-        marker_ids = self.robot_markers.get(robot_id, [])
-        
-        if len(marker_ids) != 2:
-            return None
-        
-        # Verificar que ambos marcadores estén detectados
-        if marker_ids[0] not in markers_dict or marker_ids[1] not in markers_dict:
-            return None
-        
-        marker1 = markers_dict[marker_ids[0]]
-        marker2 = markers_dict[marker_ids[1]]
-        
-        # Calcular centro promedio en imagen
-        center_x = (marker1.center[0] + marker2.center[0]) / 2
-        center_y = (marker1.center[1] + marker2.center[1]) / 2
-        
-        # Calcular posición 3D promedio
-        tvec_avg = (marker1.tvec + marker2.tvec) / 2
-        
-        return (int(center_x), int(center_y), tvec_avg)
+                    # Detectar marcador base (IDs 0 o 1). Preferimos 0 sobre 1 si ambos aparecen.
+                    if marker_id in (0, 1):
+                        if base_marker is None or marker_id == 0:
+                            base_marker = m
+
+        return markers, base_marker
 
     def get_robot_orientation(self, markers_dict, robot_id):
         """
@@ -164,20 +139,16 @@ class ArUcoDetector:
             float: Ángulo en grados (yaw) o None
         """
         marker_ids = self.robot_markers.get(robot_id, [])
-        
-        if len(marker_ids) != 2:
+
+        # Aceptar casos donde solo haya un marcador visible.
+        present = [mid for mid in marker_ids if mid in markers_dict]
+        if not present:
             return None
-        
-        if marker_ids[0] not in markers_dict or marker_ids[1] not in markers_dict:
-            return None
-        
-        marker1 = markers_dict[marker_ids[0]]
-        marker2 = markers_dict[marker_ids[1]]
-        
-        # Usar el primer marcador para obtener orientación
-        R, _ = cv2.Rodrigues(marker1.rvec)
+
+        # Usar el primer marcador disponible para obtener orientación
+        marker = markers_dict[present[0]]
+        R, _ = cv2.Rodrigues(marker.rvec)
         roll, pitch, yaw = self.rotation_matrix_to_euler_angles(R)
-        
         return yaw
 
     @staticmethod
@@ -227,9 +198,9 @@ class ArUcoDetector:
             for i in range(3):
                 Matrix[i, 3] = T.flat[i] if T.ndim > 1 else T[i]
             M = Matrix
-        
-        return M if force_type == -1 else M.astype(force_type)
 
+        return M
+        
     @staticmethod
     def calculate_distance_between_positions(tvec1, tvec2):
         """Calcula distancia 3D entre dos posiciones en metros"""
@@ -237,32 +208,115 @@ class ArUcoDetector:
         pos2 = tvec2.flatten()
         return np.linalg.norm(pos1 - pos2)
 
-    @staticmethod
-    def calculate_angle_between_robots(tvec1, tvec2):
+    def calculate_angle_between_robots(self, markers_dict, robot_id1, robot_id2, base):
         """
-        Calcula el ángulo relativo entre dos robots.
-        
+        Calcula el ángulo relativo entre dos robots basándose en sus marcadores y un marcador base.
+
         Args:
-            tvec1, tvec2: Vectores de posición 3D
-            
+            markers_dict: Diccionario {marker_id: Marker}
+            robot_id1: ID del primer robot
+            robot_id2: ID del segundo robot
+            base: Marcador de referencia para el cálculo del ángulo
+
         Returns:
-            float: Ángulo en grados
+            dict: {'distance': float, 'angle1': float, 'angle2': float} o None
         """
-        # Vector del robot 1 al robot 2
-        delta = tvec2.flatten() - tvec1.flatten()
+        marker_ids1 = self.robot_markers.get(robot_id1, [])
+        marker_ids2 = self.robot_markers.get(robot_id2, [])
         
-        # Ángulo en el plano XY (asumiendo que Z es arriba)
-        angle_rad = math.atan2(delta[1], delta[0])
-        angle_deg = math.degrees(angle_rad)
+        present1 = [mid for mid in marker_ids1 if mid in markers_dict]
+        present2 = [mid for mid in marker_ids2 if mid in markers_dict]
         
-        return angle_deg
+        if not present1 or not present2:
+            return None
+        
+        marker1 = markers_dict[present1[0]]
+        marker2 = markers_dict[present2[0]]
+        
+        tvec_base = base.tvec.flatten()
+        rvec_base = base.rvec
+        tvec1 = marker1.tvec.flatten()
+        tvec2 = marker2.tvec.flatten()
+        rvec1 = marker1.rvec
+        rvec2 = marker2.rvec
+        
+        # Construir matrices RT
+        M1 = self.get_rt_matrix(rvec1, tvec1)
+        M2 = self.get_rt_matrix(rvec2, tvec2)
+
+        if M1 is None or M2 is None:
+            raise ValueError("get_rt_matrix devolvió None para uno de los marcadores (revisar rvec/tvec y sus dtypes)")
+
+        # Si no se proporciona un marcador base, trabajamos en el sistema de cámara/world tal como
+        # lo devuelven las matrices RT de los marcadores (no hacemos transformación adicional).
+        if base is None:
+            M1_in_base = M1
+            M2_in_base = M2
+        else:
+            M_Base = self.get_rt_matrix(rvec_base, tvec_base)
+            if M_Base is None:
+                raise ValueError("get_rt_matrix devolvió None para el marcador base (revisar rvec/tvec y sus dtypes)")
+
+            # Transformar a sistema de coordenadas del marcador base
+            MBase_inv = np.linalg.inv(M_Base)
+
+            M1_in_base = MBase_inv @ M1
+            M2_in_base = MBase_inv @ M2
+
+        # Extraer vector de traslación (3x1) en el sistema base
+        t1_in_base = M1_in_base[0:3, 3].reshape(3,1)
+        t2_in_base = M2_in_base[0:3, 3].reshape(3,1)
+
+        # Posiciciones en el sistema base
+        pos_1 = M1_in_base[0:3, 3]
+        pos_2 = M2_in_base[0:3, 3]
+        v_12 = pos_2 - pos_1
+
+        n_1 = M1_in_base[0:3, 2]  # eje Z del robot 1 en base
+        n_2 = M2_in_base[0:3, 2]  # eje Z del robot 2 en base
+
+        # Proyecciones de las normales y del vector entre robots en el plano XY del sistema base
+        n_1_xy = np.array([n_1[0], n_1[1], 0.0])
+        n_2_xy = np.array([n_2[0], n_2[1], 0.0])
+        v_12_xy = np.array([v_12[0], v_12[1], 0.0])
+        v_21_xy = -v_12_xy
+
+        # Normalizar vectores
+        def safe_normalize(v):
+            norm = np.linalg.norm(v)
+            return v / norm if norm > 1e-6 else v * 0.0
+        
+        n_1_xy = safe_normalize(n_1_xy)
+        n_2_xy = safe_normalize(n_2_xy)
+        v_12_xy = safe_normalize(v_12_xy)
+        v_21_xy = safe_normalize(v_21_xy)
+
+        # Ángulos (azimut) de cada vector
+        az_n1 = math.atan2(n_1_xy[1], n_1_xy[0])
+        az_v12 = math.atan2(v_12_xy[1], v_12_xy[0])
+        az_n2 = math.atan2(n_2_xy[1], n_2_xy[0])
+        az_v21 = math.atan2(v_21_xy[1], v_21_xy[0])
+
+        # Diferencia angular en grados
+        angle1 = self.normalize_angle_deg(np.degrees(az_v12 - az_n1))
+        angle2 = self.normalize_angle_deg(np.degrees(az_v21 - az_n2))
+
+        # Distancia entre robots
+        distance = self.calculate_distance_between_positions(t1_in_base, t2_in_base)
+        
+        return {
+            'distance': distance,
+            'angle1': angle1,
+            'angle2': angle2
+        }
+
 
     @staticmethod
     def normalize_angle_deg(a):
         """Normaliza ángulo a rango [-180, 180] grados"""
         return ((a + 180) % 360) - 180
 
-    def process_frame(self, frame):
+    def process_frame(self, frame, base_marker=None):
         """
         Procesa un frame completo: detecta robots y calcula distancias/ángulos.
         
@@ -275,7 +329,11 @@ class ArUcoDetector:
         image_copy = frame.copy()
         
         # Detectar todos los marcadores
-        markers = self.detect_markers(frame)
+        markers, detected_base = self.detect_markers(frame)
+
+        # Si no se pasó un base externo, usar el detectado en la imagen
+        if base_marker is None:
+            base_marker = detected_base
         
         # Crear diccionario de marcadores por ID
         markers_dict = {m.id: m for m in markers}
@@ -302,30 +360,41 @@ class ArUcoDetector:
         
         # Procesar cada robot
         for robot_id in self.robot_markers.keys():
-            robot_center = self.get_robot_center(markers_dict, robot_id)
+            # IDs de marcadores de este robot
+            marker_ids = self.robot_markers.get(robot_id, [])
+            # Lista de Marker presentes (puede ser vacía, 1 o 2)
+            present_markers = [markers_dict[mid] for mid in marker_ids if mid in markers_dict]
+
+            if not present_markers:
+                continue
+
+            # Orientación (yaw) si necesitas mostrarla
             robot_yaw = self.get_robot_orientation(markers_dict, robot_id)
-            
-            if robot_center is not None:
-                cx, cy, tvec = robot_center
-                
-                robot_data[robot_id] = {
-                    'center': (cx, cy),
-                    'tvec': tvec,
-                    'yaw': robot_yaw if robot_yaw is not None else 0.0
-                }
-                
-                info['robots_detected'].append(robot_id)
-                
-                # Dibujar centro del robot
-                cv2.circle(image_copy, (cx, cy), 10, (0, 255, 0), -1)
-                cv2.putText(image_copy, f"Robot {robot_id}", 
-                           (cx + 15, cy - 15),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                
-                if robot_yaw is not None:
-                    cv2.putText(image_copy, f"Yaw: {robot_yaw:.1f}°", 
-                               (cx + 15, cy),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+            # Centro del robot
+            m = present_markers[0]
+            cx, cy = int(m.center[0]), int(m.center[1])
+            # Usar la tvec del marcador directamente como estimación del centro 3D del robot
+            tvec = m.tvec
+
+            # Guardar datos del robot
+            robot_data[robot_id] = {
+                'center': (cx, cy),
+                'tvec': tvec,
+                'yaw': robot_yaw if robot_yaw is not None else 0.0
+            }
+            info['robots_detected'].append(robot_id)
+
+            # Dibujar centro del robot
+            cv2.circle(image_copy, (cx, cy), 10, (0, 255, 0), -1)
+            cv2.putText(image_copy, f"Robot {robot_id}", 
+                       (cx + 15, cy - 15),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+            if robot_yaw is not None:
+                cv2.putText(image_copy, f"Yaw: {robot_yaw:.1f}°", 
+                           (cx + 15, cy),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         
         # Calcular distancias y ángulos entre robots
         detected_robots = list(robot_data.keys())
@@ -337,20 +406,17 @@ class ArUcoDetector:
                     robot_id1 = detected_robots[i]
                     robot_id2 = detected_robots[j]
                     
-                    tvec1 = robot_data[robot_id1]['tvec']
-                    tvec2 = robot_data[robot_id2]['tvec']
-                    
-                    # Calcular distancia
-                    distance = self.calculate_distance_between_positions(tvec1, tvec2)
-                    
-                    # Calcular ángulo relativo
-                    angle = self.calculate_angle_between_robots(tvec1, tvec2)
-                    
+                    # Calcular ángulo relativo y distancia usando markers_dict
+                    angle_info = self.calculate_angle_between_robots(markers_dict, robot_id1, robot_id2, base_marker)
+                    if angle_info is None:
+                        continue
+
                     pair_info = {
                         'robot1': robot_id1,
                         'robot2': robot_id2,
-                        'distance': distance,
-                        'angle': angle
+                        'distance': angle_info['distance'],
+                        'angle1': angle_info['angle1'],
+                        'angle2': angle_info['angle2'],
                     }
                     
                     info['robot_pairs'].append(pair_info)
@@ -365,7 +431,7 @@ class ArUcoDetector:
                     mid_y = (pt1[1] + pt2[1]) // 2
                     
                     cv2.putText(image_copy, 
-                               f"D:{distance*100:.1f}cm A:{angle:.1f}°",
+                               f"D:{pair_info['distance']*100:.1f}cm A:{pair_info['angle']:.1f}°",
                                (mid_x, mid_y),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
 

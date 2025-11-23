@@ -1,7 +1,7 @@
 # Configuraciones y constantes del proyecto
 
 # Longitud del marcador ArUco en metros
-MARKER_LENGTH = 0.025
+MARKER_LENGTH = 0.05
 
 # Configuración de la cámara
 CAMERA_ID = 0  # ID de la cámara a utilizar

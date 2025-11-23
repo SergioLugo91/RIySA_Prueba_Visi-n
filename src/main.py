@@ -30,7 +30,6 @@ def main():
         1: [2, 3],    # Robot 1 usa ArUco IDs 2 y 3
         2: [4, 5],    # Robot 2 usa ArUco IDs 4 y 5
         3: [6, 7],    # Robot 3 usa ArUco IDs 6 y 7
-        4: [8, 9],    # Robot 4 usa ArUco IDs 8 y 9
     }
     
     print("\nConfiguración de marcadores por robot:")
@@ -53,7 +52,7 @@ def main():
     
     # Crear detector de robots
     robot_detector = ArUcoDetector(
-        marker_length=0.025,
+        marker_length=0.05,
         cam_id=CAM_ID,
         target_fps=TARGET_FPS,
         calibration_path=CALIBRATION_PATH,
