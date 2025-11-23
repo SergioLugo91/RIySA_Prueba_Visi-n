@@ -37,6 +37,7 @@ vision-robotica-proyecto
 │   ├── __init__.py
 │   ├── test_aruco_detector.py      # Pruebas para el detector de marcadores ArUco.
 │   └── test_ring_detector.py       # Pruebas para el detector de anillos.
+├── RobPCComm @ 05df17c             # Código de comunicación.
 ├── requirements.txt                # Dependencias del proyecto.
 ├── .gitignore                      # Archivos y directorios a ignorar por Git.
 └── README.md                       # Documentación del proyecto.
