@@ -6,9 +6,9 @@ import time
 
 #===== Captura de datos ======
 
-CAM_INDEX = 0         
+CAM_INDEX = 1         
 RESOLUTION = (1280,720) # ajusta a tu cámara
-SAVE_DIR = "Calibracion/CaptCalibCamSergio"      # carpeta de salida
+SAVE_DIR = "Calibracion/CaptCalibCamAlvaro"      # carpeta de salida
 
 os.makedirs(SAVE_DIR, exist_ok=True)
 
@@ -36,7 +36,7 @@ CHESSBOARD = (7, 7)        # número de esquinas interiores (col x fil)
 SQUARE_SIZE = 32.0         # tamaño del cuadro en milímetros (3.3 cm)
 
 # === CARPETA DE IMÁGENES ===
-IMG_DIR = "Calibracion/CaptCalib"
+IMG_DIR = "Calibracion/CaptCalibCamAlvaro"
 
 # === PREPARACIÓN DE LOS PUNTOS 3D DEL TABLERO (plano Z=0) ===
 objp = np.zeros((CHESSBOARD[0]*CHESSBOARD[1], 3), np.float32)

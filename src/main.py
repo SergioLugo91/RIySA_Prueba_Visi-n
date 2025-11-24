@@ -146,7 +146,7 @@ def main():
                 q /= q[2]
                 xw, yw = float(q[0]), float(q[1])
                 
-                inside = (0 <= xw <= ring_detector.width) and (0 <= yw <= ring_detector.height)
+                inside = (0 <= xw <= ring_detector.width) and (0 <= yw <= ring_detector.height + 0.15 )
                 
                 # Inicializar o actualizar Ubot
                 if robot_id not in datos_robots:
