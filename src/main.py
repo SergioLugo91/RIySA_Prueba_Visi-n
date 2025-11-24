@@ -22,7 +22,7 @@ def main():
     
     # Configuración
     CALIBRATION_PATH = "calibracion/cam_calib_data.npz"
-    CAM_ID = 0  # ID de la cámara
+    CAM_ID = 1  # ID de la cámara
     TARGET_FPS = 30.0
     
     # CONFIGURACIÓN DE MARCADORES POR ROBOT
@@ -67,7 +67,7 @@ def main():
     RobotCommInstance.addRobot(2)
 
     # Usar la misma cámara para ambos detectores
-    cap = cv2.VideoCapture(CAM_ID)
+    cap = cv2.VideoCapture(CAM_ID,cv2.CAP_DSHOW)
     
     if not cap.isOpened():
         print("Error: No se puede abrir la cámara")

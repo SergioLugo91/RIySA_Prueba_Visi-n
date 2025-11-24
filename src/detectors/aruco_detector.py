@@ -431,7 +431,7 @@ class ArUcoDetector:
                     mid_y = (pt1[1] + pt2[1]) // 2
                     
                     cv2.putText(image_copy, 
-                               f"D:{pair_info['distance']*100:.1f}cm A:{pair_info['angle']:.1f}°",
+                               f"D:{pair_info['distance']*100:.1f}cm A:{pair_info['angle1']:.1f}°",
                                (mid_x, mid_y),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
 

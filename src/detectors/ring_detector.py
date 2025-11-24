@@ -2,7 +2,7 @@ import cv2
 import numpy as np                  
 import cv2.aruco as aruco  
 from collections import deque
-from src.filters.median_corner_filter import MedianCornerFilter
+from filters.median_corner_filter import MedianCornerFilter
 
 class RingDetector:
     """
