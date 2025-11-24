@@ -301,6 +301,12 @@ class ArUcoDetector:
         angle1 = self.normalize_angle_deg(np.degrees(az_v12 - az_n1))
         angle2 = self.normalize_angle_deg(np.degrees(az_v21 - az_n2))
 
+        # Ajustar ángulos si es el aruco trasero
+        if marker1.id == marker_ids1[0]:
+            angle1 = self.normalize_angle_deg(angle1 + 180.0)
+        if marker2.id == marker_ids2[0]:
+            angle2 = self.normalize_angle_deg(angle2 + 180.0)
+
         # Distancia entre robots
         distance = self.calculate_distance_between_positions(t1_in_base, t2_in_base)
         

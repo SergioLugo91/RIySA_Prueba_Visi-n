@@ -1,5 +1,6 @@
 # Punto de entrada de la aplicación para el proyecto de visión robótica
 
+import math
 import cv2
 import numpy as np
 import sys
@@ -176,12 +177,12 @@ def main():
             
             # Actualizar datos de Ubot con distancia y ángulo
             if r1 in datos_robots:
-                datos_robots[r1].dist = dist
-                datos_robots[r1].ang = ang1
+                datos_robots[r1].dist = round(dist,1)
+                datos_robots[r1].ang = round(ang1,1)
             
             if r2 in datos_robots:
-                datos_robots[r2].dist = dist
-                datos_robots[r2].ang = ang2
+                datos_robots[r2].dist = round(dist,1)
+                datos_robots[r2].ang = round(ang2,1)
             
             # Dibujar línea entre robots
             if r1 in robot_data and r2 in robot_data:
