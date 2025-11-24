@@ -6,6 +6,7 @@ import sys
 from detectors.ring_detector import RingDetector
 from detectors.aruco_detector import ArUcoDetector
 from models.ubot import Ubot
+from RobPCComm.ComRobotLib.PCComm import RobotComm
 
 def main():
     """
@@ -27,9 +28,9 @@ def main():
     # CONFIGURACIÓN DE MARCADORES POR ROBOT
     # Cambia estos valores según tus marcadores reales
     ROBOT_MARKERS = {
-        1: [2, 3],    # Robot 1 usa ArUco IDs 2 y 3
-        2: [4, 5],    # Robot 2 usa ArUco IDs 4 y 5
-        3: [6, 7],    # Robot 3 usa ArUco IDs 6 y 7
+        0: [2, 3],    # Robot 0 usa ArUco IDs 2 y 3
+        1: [4, 5],    # Robot 1 usa ArUco IDs 4 y 5
+        2: [6, 7],    # Robot 2 usa ArUco IDs 6 y 7
     }
     
     print("\nConfiguración de marcadores por robot:")
@@ -59,6 +60,12 @@ def main():
         robot_markers=ROBOT_MARKERS
     )
     
+    # Configurar comunicación con robots
+    RobotCommInstance = RobotComm(logfile="robot_datalog.txt")
+    RobotCommInstance.addRobot(0)
+    RobotCommInstance.addRobot(1)
+    RobotCommInstance.addRobot(2)
+
     # Usar la misma cámara para ambos detectores
     cap = cv2.VideoCapture(CAM_ID)
     
@@ -124,8 +131,6 @@ def main():
         # Procesar robots detectados
         for robot_id, data in robot_data.items():
             cx, cy = data['center']
-            tvec = data['tvec']
-            yaw = data['yaw']
             
             # Dibujar centro del robot
             cv2.circle(frame_combined, (cx, cy), 10, (0, 255, 0), -1)
@@ -166,16 +171,17 @@ def main():
             r1 = pair_info['robot1']
             r2 = pair_info['robot2']
             dist = pair_info['distance']
-            ang = pair_info['angle']
+            ang1 = pair_info['angle1']
+            ang2 = pair_info['angle2']
             
             # Actualizar datos de Ubot con distancia y ángulo
             if r1 in datos_robots:
                 datos_robots[r1].dist = dist
-                datos_robots[r1].ang = ang
+                datos_robots[r1].ang = ang1
             
             if r2 in datos_robots:
                 datos_robots[r2].dist = dist
-                datos_robots[r2].ang = ang
+                datos_robots[r2].ang = ang2
             
             # Dibujar línea entre robots
             if r1 in robot_data and r2 in robot_data:
@@ -186,9 +192,20 @@ def main():
                 mid_x = (pt1[0] + pt2[0]) // 2
                 mid_y = (pt1[1] + pt2[1]) // 2
                 cv2.putText(frame_combined, 
-                           f"D:{dist*100:.1f}cm A:{ang:.1f}°",
+                           f"D:{dist*100:.1f}cm A:{ang1:.1f}°",
                            (mid_x, mid_y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+            
+        # Enviar información de los robots
+        for robot_id, robot in datos_robots.items():
+            RobotCommInstance.enviarRobot(
+                id_robot=robot_id,
+                ang=robot.ang,
+                dist=robot.dist,
+                out=robot.Out
+            )
+            RobotCommInstance.recibirRespuesta()
+
         
         # ===== INFORMACIÓN EN PANTALLA =====
         y_offset = 30
