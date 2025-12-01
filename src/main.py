@@ -5,9 +5,10 @@ import cv2
 import numpy as np
 import sys
 from detectors.ring_detector import RingDetector
-from detectors.aruco_detector import ArUcoDetector
+from detectors.aruco_detector import ArUCoDetector
 from models.ubot import Ubot
 from RobPCComm.ComRobotLib.PCComm import RobotComm
+from combat.combate import CombatController  # <-- NUEVA LÍNEA
 
 def main():
     """
@@ -53,13 +54,16 @@ def main():
     )
     
     # Crear detector de robots
-    robot_detector = ArUcoDetector(
+    robot_detector = ArUCoDetector(
         marker_length=0.05,
         cam_id=CAM_ID,
         target_fps=TARGET_FPS,
         calibration_path=CALIBRATION_PATH,
         robot_markers=ROBOT_MARKERS
     )
+    
+    # Crear controlador de combate <-- NUEVA LÍNEA
+    combat_ctrl = CombatController(num_robots=len(ROBOT_MARKERS), ring_width=0.80, ring_height=0.80)
     
     # Configurar comunicación con robots
     RobotCommInstance = RobotComm(logfile="robot_datalog.txt")
@@ -77,6 +81,7 @@ def main():
     print("\n✓ Sistema iniciado correctamente")
     print("\nControles:")
     print("  ESC - Salir")
+    print("  SPACE - Iniciar posicionamiento")  # <-- NUEVO
     print("  R - Resetear filtro de esquinas del ring")
     print("  P - Imprimir estado de robots")
     print("-" * 60)
@@ -98,6 +103,9 @@ def main():
         
         # ===== PROCESAR ROBOTS =====
         frame_robots, markers, robot_data, robot_info = robot_detector.process_frame(frame.copy())
+        
+        # ===== VERIFICAR DETECCIÓN PARA COMBATE =====  <-- NUEVO BLOQUE
+        detection_info = combat_ctrl.check_robots_in_view(robot_data)
         
         # ===== INTEGRAR DATOS =====
         frame_combined = frame.copy()
@@ -130,6 +138,7 @@ def main():
                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 255), 1)
         
         # Procesar robots detectados
+        robots_world_data = {}  # <-- NUEVO: Para check_all_robots_in_position
         for robot_id, data in robot_data.items():
             cx, cy = data['center']
             
@@ -158,6 +167,12 @@ def main():
                     )
                 else:
                     datos_robots[robot_id].Out = 1 if not inside else 0
+                
+                # Guardar posición en mundo <-- NUEVO
+                robots_world_data[robot_id] = {
+                    'world_pos': (xw, yw),
+                    'yaw': None  # TODO: calcular orientación
+                }
                 
                 color = (0, 255, 0) if inside else (0, 0, 255)
                 status = "DENTRO" if inside else "FUERA"
@@ -196,7 +211,26 @@ def main():
                            f"D:{dist*100:.1f}cm A:{ang1:.1f}°",
                            (mid_x, mid_y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
-            
+        
+        # ===== LÓGICA DE COMBATE =====  <-- NUEVO BLOQUE
+        # Si está en posicionamiento, verificar posiciones
+        if combat_ctrl.positioning_phase:
+            position_info = combat_ctrl.check_all_robots_in_position(robots_world_data)
+            if position_info['ready_to_combat']:
+                combat_ctrl.start_combat()
+        
+        # Si combate activo, verificar OUT
+        if combat_ctrl.combat_active:
+            for robot_id, robot in datos_robots.items():
+                if robot.Out == 1:
+                    combat_ctrl.end_combat(robot_id)
+                    break
+        
+        # Si combate finalizado, preparar siguiente round
+        if combat_ctrl.combat_finished:
+            combat_ctrl.prepare_next_round()
+            combat_ctrl.start_positioning_phase()
+        
         # Enviar información de los robots
         for robot_id, robot in datos_robots.items():
             RobotCommInstance.enviarRobot(
@@ -210,6 +244,12 @@ def main():
         
         # ===== INFORMACIÓN EN PANTALLA =====
         y_offset = 30
+        
+        # Mostrar estado del combate <-- NUEVO
+        for line in combat_ctrl.get_combat_status_text():
+            cv2.putText(frame_combined, line, (10, y_offset), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            y_offset += 25
         
         cv2.putText(frame_combined, f"RING: {len(ring_info['markers_detected'])}/2 marcadores", 
                    (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
@@ -249,6 +289,9 @@ def main():
         if key == 27:  # ESC
             print("\nSaliendo del sistema...")
             break
+        elif key == ord(' '):  # SPACE <-- NUEVO
+            if detection_info['ready_to_start']:
+                combat_ctrl.start_positioning_phase()
         elif key == 114:  # 'r'
             ring_detector.corner_filter.reset()
             print("Filtro de esquinas reseteado")
