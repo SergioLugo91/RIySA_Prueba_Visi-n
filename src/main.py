@@ -42,7 +42,7 @@ def main():
     ring_detector = RingDetector(
         width=0.80,
         height=0.80,
-        marker_length=0.09,
+        marker_length=0.087,
         id_a=0,
         id_b=1,
         offset_a=(0.0, 0.03),
@@ -54,7 +54,7 @@ def main():
     
     # Crear detector de robots
     robot_detector = ArUcoDetector(
-        marker_length=0.05,
+        marker_length=0.048,
         cam_id=CAM_ID,
         target_fps=TARGET_FPS,
         calibration_path=CALIBRATION_PATH,
