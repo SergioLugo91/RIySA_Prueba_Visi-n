@@ -146,7 +146,7 @@ def main():
                 q /= q[2]
                 xw, yw = float(q[0]), float(q[1])
                 
-                inside = (0 <= xw <= ring_detector.width) and (0 <= yw <= ring_detector.height + 0.15 )
+                inside = (-0.05 <= xw <= ring_detector.width + 0.15) and ( 0.05 <= yw <= ring_detector.height + 0.15 )
                 
                 # Inicializar o actualizar Ubot
                 if robot_id not in datos_robots:
@@ -175,13 +175,37 @@ def main():
             ang1 = pair_info['angle1']
             ang2 = pair_info['angle2']
             
+            # NUEVA IMPLEMENTACIÓN: Calcular distancia usando homografía del ring
+            if homography is not None and r1 in robot_data and r2 in robot_data:
+                # Proyectar centros de robots a coordenadas del mundo (ring)
+                cx1, cy1 = robot_data[r1]['center']
+                cx2, cy2 = robot_data[r2]['center']
+                
+                # Convertir a coordenadas del mundo
+                p1 = np.array([cx1, cy1, 1.0], dtype=np.float32)
+                p2 = np.array([cx2, cy2, 1.0], dtype=np.float32)
+                
+                q1 = homography @ p1
+                q1 /= q1[2]
+                xw1, yw1 = float(q1[0]), float(q1[1])
+                
+                q2 = homography @ p2
+                q2 /= q2[2]
+                xw2, yw2 = float(q2[0]), float(q2[1])
+                
+                # Distancia en el plano del ring (2D)
+                dist_2d = np.sqrt((xw2 - xw1)**2 + (yw2 - yw1)**2)
+                
+                # Usar la distancia 2D en lugar de la 3D
+                dist = dist_2d
+            
             # Actualizar datos de Ubot con distancia y ángulo
             if r1 in datos_robots:
-                datos_robots[r1].dist = round(dist,1)
+                datos_robots[r1].dist = round(dist,2)
                 datos_robots[r1].ang = round(ang1,1)
             
             if r2 in datos_robots:
-                datos_robots[r2].dist = round(dist,1)
+                datos_robots[r2].dist = round(dist,2)
                 datos_robots[r2].ang = round(ang2,1)
             
             # Dibujar línea entre robots
