@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import sys
 from detectors.ring_detector import RingDetector
-from detectors.aruco_detector import ArUCoDetector
+from detectors.aruco_detector import ArUcoDetector
 from models.ubot import Ubot
 from RobPCComm.ComRobotLib.PCComm import RobotComm
 from combat.combate import CombatController  # <-- NUEVA LÍNEA
@@ -54,7 +54,7 @@ def main():
     )
     
     # Crear detector de robots
-    robot_detector = ArUCoDetector(
+    robot_detector = ArUcoDetector(
         marker_length=0.05,
         cam_id=CAM_ID,
         target_fps=TARGET_FPS,
