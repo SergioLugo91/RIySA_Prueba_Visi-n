@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Robot Arena</title>
+    <style>
+        body { font-family: Arial; text-align: center; }
+        .robot { margin: 10px; padding: 10px; border: 1px solid #ccc; display: inline-block; min-width: 250px; }
+        .comm-ok { color: green; font-weight: bold; }
+        .comm-error { color: red; font-weight: bold; }
+        .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-left: 5px; }
+        .green { background-color: green; }
+        .red { background-color: red; }
+    </style>
+</head>
+<body>
+    <h1>Robot Arena</h1>
+
+    <!-- Video -->
+    <img src="{{ url_for('video_feed') }}" width="640" height="480">
+
+    <h2>Estados de los Robots</h2>
+    {% for rid, state in states.items() %}
+        <div class="robot">
+            <strong>Robot {{ rid }}</strong>: {{ state }}
+            <br>
+            {% if comm_status[rid] %}
+                <span class="comm-ok">Comunicación: OK</span>
+                <span class="status-indicator green"></span>
+            {% else %}
+                <span class="comm-error">Comunicación: ERROR</span>
+                <span class="status-indicator red"></span>
+            {% endif %}
+        </div>
+    {% endfor %}
+
+    <h2>Controles</h2>
+    <a href="{{ url_for('start_fight') }}"><button>Iniciar Pelea</button></a>
+    <a href="{{ url_for('stop_fight') }}"><button>Parar Pelea</button></a>
+</body>
+</html>
