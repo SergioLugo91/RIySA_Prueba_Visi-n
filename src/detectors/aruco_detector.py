@@ -233,12 +233,17 @@ class ArUcoDetector:
         marker1 = markers_dict[present1[0]]
         marker2 = markers_dict[present2[0]]
         
-        tvec_base = base.tvec.flatten()
-        rvec_base = base.rvec
-        tvec1 = marker1.tvec.flatten()
-        tvec2 = marker2.tvec.flatten()
-        rvec1 = marker1.rvec
-        rvec2 = marker2.rvec
+        try:
+            if base is not None:
+                tvec_base = base.tvec.flatten()
+                rvec_base = base.rvec
+            tvec1 = marker1.tvec.flatten()
+            tvec2 = marker2.tvec.flatten()
+            rvec1 = marker1.rvec
+            rvec2 = marker2.rvec
+        except Exception as e:
+            print(f"[ERROR] Al obtener tvec/rvec de marcadores: {e}")
+            return None
         
         # Construir matrices RT
         M1 = self.get_rt_matrix(rvec1, tvec1)
@@ -360,9 +365,9 @@ class ArUcoDetector:
             cv2.aruco.drawDetectedMarkers(image_copy, corners_list, ids_array)
 
             # Dibujar ejes de cada marcador
-            for marker in markers:
-                cv2.drawFrameAxes(image_copy, self.cam_matrix, self.dist_coeffs, 
-                                 marker.rvec, marker.tvec, self.marker_length * 1.5)
+            #for marker in markers:
+            #    cv2.drawFrameAxes(image_copy, self.cam_matrix, self.dist_coeffs, 
+            #                     marker.rvec, marker.tvec, self.marker_length * 1.5)
         
         # Procesar cada robot
         for robot_id in self.robot_markers.keys():
