@@ -1,4 +1,5 @@
 import time
+import cv2
 from flask import Flask, render_template, Response, redirect, url_for
 
 class Interface:
@@ -75,3 +76,20 @@ class Interface:
             debug: Modo debug de Flask
         """
         self.app.run(host=host, port=port, debug=debug)
+
+
+# ---------------------
+# Dummy robot_comm
+# ---------------------
+class DummyComm:
+    def __init__(self):
+        self.robot_states = {"r1": "idle", "r2": "idle"}
+        self.robot_comm_status = "OK"
+
+    def log(self, title, msg):
+        print(title, msg)
+
+
+if __name__ == "__main__":
+    interface = Interface(DummyComm())
+    interface.run_server(debug=True)
