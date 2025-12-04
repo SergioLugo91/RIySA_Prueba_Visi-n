@@ -6,3 +6,4 @@ class Ubot:
     ang: float
     dist: float
     Out: int
+    comm_ok: bool = True  # Estado de la comunicación con el robot
