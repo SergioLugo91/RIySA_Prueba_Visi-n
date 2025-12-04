@@ -4,92 +4,33 @@ import math
 import cv2
 import numpy as np
 import sys
+import time
+import threading
 from detectors.ring_detector import RingDetector
 from detectors.aruco_detector import ArUcoDetector
 from models.ubot import Ubot
-from RobPCComm.ComRobotLib.PCComm import RobotComm
+from RobPCComm.ComRobotLib.PCComm import RobotComm, Interface
 
-def main():
-    """
-    Sistema integrado de visión artificial para robótica de combate.
-    Detecta simultáneamente:
-    - Ring de combate (usando marcadores ArUco ID 0 y 1)
-    - Robots (cada robot usa 2 marcadores ArUco)
-    """
-    print("=" * 60)
-    print("SISTEMA INTEGRADO DE VISIÓN ARTIFICIAL - ROBÓTICA")
-    print("=" * 60)
-    print("\nInicializando detectores...")
-    
-    # Configuración
-    CALIBRATION_PATH = "calibracion/cam_calib_data.npz"
-    CAM_ID = 1  # ID de la cámara
-    TARGET_FPS = 30.0
-    
-    # CONFIGURACIÓN DE MARCADORES POR ROBOT
-    # Cambia estos valores según tus marcadores reales
-    ROBOT_MARKERS = {
-        0: [2, 3],    # Robot 0 usa ArUco IDs 2 y 3
-        1: [4, 5],    # Robot 1 usa ArUco IDs 4 y 5
-        2: [6, 7],    # Robot 2 usa ArUco IDs 6 y 7
-    }
-    
-    print("\nConfiguración de marcadores por robot:")
-    for robot_id, marker_ids in ROBOT_MARKERS.items():
-        print(f"  Robot {robot_id}: ArUcos {marker_ids}")
-    
-    # Crear detector del ring
-    ring_detector = RingDetector(
-        width=0.80,
-        height=0.80,
-        marker_length=0.087,
-        id_a=0,
-        id_b=1,
-        offset_a=(0.0, 0.03),
-        offset_b=(0.0, 0.05),
-        cam_id=CAM_ID,
-        target_fps=TARGET_FPS,
-        calibration_path=CALIBRATION_PATH
-    )
-    
-    # Crear detector de robots
-    robot_detector = ArUcoDetector(
-        marker_length=0.048,
-        cam_id=CAM_ID,
-        target_fps=TARGET_FPS,
-        calibration_path=CALIBRATION_PATH,
-        robot_markers=ROBOT_MARKERS
-    )
-    
-    # Configurar comunicación con robots
-    RobotCommInstance = RobotComm(logfile="robot_datalog.txt")
-    RobotCommInstance.addRobot(0)
-    RobotCommInstance.addRobot(1)
-    RobotCommInstance.addRobot(2)
+# Variables globales para compartir entre threads
+datos_robots = {}
+frame_count = 0
+TARGET_FPS = 30.0
+ROBOT_MARKERS = {}
 
-    # Usar la misma cámara para ambos detectores
-    cap = cv2.VideoCapture(CAM_ID,cv2.CAP_DSHOW)
+def vision_loop():
+    """
+    Bucle principal de visión que procesa frames y envía datos a robots.
+    """
+    global frame_count, datos_robots
     
-    if not cap.isOpened():
-        print("Error: No se puede abrir la cámara")
-        sys.exit(1)
-    
-    print("\n✓ Sistema iniciado correctamente")
-    print("\nControles:")
-    print("  ESC - Salir")
-    print("  R - Resetear filtro de esquinas del ring")
-    print("  P - Imprimir estado de robots")
-    print("-" * 60)
-    
-    # Variables para el sistema integrado
-    frame_count = 0
-    datos_robots = {}  # Diccionario {robot_id: Ubot}
+    print("✓ Iniciando bucle de visión...")
     
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("\nError: No se puede leer el frame de la cámara")
-            break
+            print("\nWARNING: No se puede leer el frame de la cámara")
+            time.sleep(0.1)
+            continue
         
         frame_count += 1
         
@@ -154,7 +95,8 @@ def main():
                         id=robot_id,
                         ang=0.0,
                         dist=0.0,
-                        Out=1 if not inside else 0
+                        Out=1 if not inside else 0,
+                        comm_ok=True
                     )
                 else:
                     datos_robots[robot_id].Out = 1 if not inside else 0
@@ -220,17 +162,6 @@ def main():
                            f"D:{dist*100:.1f}cm A:{ang1:.1f}°",
                            (mid_x, mid_y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
-            
-        # Enviar información de los robots
-        for robot_id, robot in datos_robots.items():
-            RobotCommInstance.enviarRobot(
-                id_robot=robot_id,
-                ang=robot.ang,
-                dist=robot.dist,
-                out=robot.Out
-            )
-            RobotCommInstance.recibirRespuesta()
-
         
         # ===== INFORMACIÓN EN PANTALLA =====
         y_offset = 30
@@ -256,14 +187,18 @@ def main():
         if datos_robots:
             for robot_id, robot in datos_robots.items():
                 status_text = "FUERA" if robot.Out == 1 else "DENTRO"
+                comm_text = "OK" if robot.comm_ok else "ERROR"
                 color = (0, 0, 255) if robot.Out == 1 else (0, 255, 0)
                 cv2.putText(frame_combined, 
-                           f"R{robot_id}: {status_text} D:{robot.dist*100:.1f}cm A:{robot.ang:.1f}°", 
+                           f"R{robot_id}: {status_text} D:{robot.dist*100:.1f}cm A:{robot.ang:.1f}° Comm:{comm_text}", 
                            (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
                 y_offset += 25
         
         cv2.putText(frame_combined, f"Frame: {frame_count}", 
                    (w - 150, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+        
+        # Actualizar interfaz web con el frame completo
+        interface.update_frame(frame_combined)
         
         # ===== MOSTRAR VENTANAS =====
         cv2.imshow("Sistema Integrado - Ring + Robots", frame_combined)
@@ -281,32 +216,138 @@ def main():
             print("ESTADO DE ROBOTS:")
             for robot_id, robot in datos_robots.items():
                 status = "FUERA" if robot.Out == 1 else "DENTRO"
+                comm_status = "OK" if robot.comm_ok else "ERROR"
                 print(f"  Robot {robot_id}:")
                 print(f"    Posición: {status} (Out={robot.Out})")
                 print(f"    Distancia: {robot.dist*100:.2f} cm")
                 print(f"    Ángulo: {robot.ang:.2f}°")
+                print(f"    Comunicación: {comm_status}")
             print("="*50)
-    
-    # Liberar recursos
-    cap.release()
-    cv2.destroyAllWindows()
-    
-    print("\n✓ Sistema finalizado correctamente")
-    print("\nEstado final de robots:")
-    for robot_id, robot in datos_robots.items():
-        status = "FUERA" if robot.Out == 1 else "DENTRO"
-        print(f"  Robot {robot_id}: {status}, Dist={robot.dist*100:.1f}cm, Ang={robot.ang:.1f}°")
+        elif key == 13:  # ENTER
+            print(datos_robots[0])
+            # Enviar datos al robot
+            robot = datos_robots[0]
+            RobotCommInstance.enviarRobot(
+                id_robot=robot_id,
+                ang=robot.ang,
+                dist=robot.dist,
+                out=robot.Out
+            )
+            datos_robots[0].comm_ok = RobotCommInstance.recibirRespuesta()
+        
+        time.sleep(1.0 / TARGET_FPS)  # Limitar a 30 FPS
+
 
 if __name__ == "__main__":
     try:
-        main()
+        # Configuración
+        CALIBRATION_PATH = "calibracion/cam_calib_data.npz"
+        CAM_ID = 0  # ID de la cámara
+        TARGET_FPS = 30.0
+        
+        # CONFIGURACIÓN DE MARCADORES POR ROBOT
+        ROBOT_MARKERS = {
+            0: [2, 3],    # Robot 0 usa ArUco IDs 2 y 3
+            1: [6, 7],    # Robot 1 usa ArUco IDs 4 y 5
+            2: [4, 5],    # Robot 2 usa ArUco IDs 6 y 7
+        }
+        
+        print("=" * 60)
+        print("SISTEMA INTEGRADO DE VISIÓN ARTIFICIAL - ROBÓTICA")
+        print("=" * 60)
+        print("\nConfiguración de marcadores por robot:")
+        for robot_id, marker_ids in ROBOT_MARKERS.items():
+            print(f"  Robot {robot_id}: ArUcos {marker_ids}")
+        
+        # Abrir la cámara PRIMERO
+        print("\nAbriendo cámara...")
+        cap = cv2.VideoCapture(CAM_ID)
+        
+        if not cap.isOpened():
+            print("ERROR: No se puede abrir la cámara")
+            sys.exit(1)
+        
+        print("✓ Cámara abierta correctamente")
+        
+        # Verificar que puede capturar
+        ret, test_frame = cap.read()
+        if not ret:
+            print("ERROR: La cámara se abrió pero no puede capturar frames")
+            cap.release()
+            sys.exit(1)
+        
+        print(f"✓ Frame de prueba capturado: {test_frame.shape}")
+        
+        # Crear detectores
+        print("\nInicializando detectores...")
+        ring_detector = RingDetector(
+            width=0.80,
+            height=0.80,
+            marker_length=0.09,
+            id_a=0,
+            id_b=1,
+            offset_a=(0.0, 0.03),
+            offset_b=(0.0, 0.05),
+            cam_id=CAM_ID,
+            target_fps=TARGET_FPS,
+            calibration_path=CALIBRATION_PATH
+        )
+        
+        robot_detector = ArUcoDetector(
+            marker_length=0.048,
+            cam_id=CAM_ID,
+            target_fps=TARGET_FPS,
+            calibration_path=CALIBRATION_PATH,
+            robot_markers=ROBOT_MARKERS
+        )
+        print("✓ Detectores creados")
+        
+        # Configurar comunicación con robots
+        print("\nConfigurando comunicación con robots...")
+        RobotCommInstance = RobotComm(logfile="robot_datalog.txt")
+        RobotCommInstance.addRobot(0)
+        RobotCommInstance.addRobot(1)
+        RobotCommInstance.addRobot(2)
+        print("✓ Comunicación configurada")
+        
+        # Crear interfaz web
+        print("\nCreando interfaz web...")
+        interface = Interface(RobotCommInstance)
+        print("✓ Interfaz creada")
+        
+        # Lanzar el bucle de visión en un thread separado
+        t_vision = threading.Thread(target=vision_loop, daemon=True)
+        t_vision.start()
+        print("✓ Thread de visión iniciado")
+        
+        # Arrancar el servidor Flask en el hilo principal
+        print("\n" + "="*60)
+        print("Iniciando servidor web en http://localhost:5000")
+        print("Presiona Ctrl+C para detener")
+        print("="*60 + "\n")
+        
+        interface.run_server(debug=False)
+        
     except KeyboardInterrupt:
-        print("\n\nPrograma interrumpido por el usuario")
-        cv2.destroyAllWindows()
-        sys.exit(0)
+        print("\n[CTRL+C] Deteniendo programa...")
     except Exception as e:
         print(f"\n\nError inesperado: {e}")
         import traceback
         traceback.print_exc()
+    finally:
+        # Liberar recursos
+        if cap is not None:
+            cap.release()
         cv2.destroyAllWindows()
-        sys.exit(1)
+        if RobotCommInstance is not None:
+            RobotCommInstance.close()
+        
+        print("\n✓ Sistema finalizado correctamente")
+        if datos_robots:
+            print("\nEstado final de robots:")
+            for robot_id, robot in datos_robots.items():
+                status = "FUERA" if robot.Out == 1 else "DENTRO"
+                comm_status = "OK" if robot.comm_ok else "ERROR"
+                print(f"  Robot {robot_id}: {status}, Dist={robot.dist*100:.1f}cm, Ang={robot.ang:.1f}°, Comm={comm_status}")
+        print("✓ Recursos liberados")
+        sys.exit(0)
