@@ -12,20 +12,21 @@ from models.ubot import Ubot
 from RobPCComm.ComRobotLib.PCComm import RobotComm, Interface
 
 # Variables globales para compartir entre threads
-datos_robots = {}
+datos_ubot = {}
 frame_count = 0
 TARGET_FPS = 30.0
 ROBOT_MARKERS = {}
+exit_event = threading.Event()  # ✅ Evento para señalizar salida
 
 def vision_loop():
     """
     Bucle principal de visión que procesa frames y envía datos a robots.
     """
-    global frame_count, datos_robots
+    global frame_count, datos_ubot
     
     print("✓ Iniciando bucle de visión...")
     
-    while True:
+    while not exit_event.is_set():  # ✅ Verificar evento de salida
         ret, frame = cap.read()
         if not ret:
             print("\nWARNING: No se puede leer el frame de la cámara")
@@ -90,8 +91,8 @@ def vision_loop():
                 inside = (-0.05 <= xw <= ring_detector.width + 0.15) and ( 0.05 <= yw <= ring_detector.height + 0.15 )
                 
                 # Inicializar o actualizar Ubot
-                if robot_id not in datos_robots:
-                    datos_robots[robot_id] = Ubot(
+                if robot_id not in datos_ubot:
+                    datos_ubot[robot_id] = Ubot(
                         id=robot_id,
                         ang=0.0,
                         dist=0.0,
@@ -99,7 +100,7 @@ def vision_loop():
                         comm_ok=True
                     )
                 else:
-                    datos_robots[robot_id].Out = 1 if not inside else 0
+                    datos_ubot[robot_id].Out = 1 if not inside else 0
                 
                 color = (0, 255, 0) if inside else (0, 0, 255)
                 status = "DENTRO" if inside else "FUERA"
@@ -142,13 +143,13 @@ def vision_loop():
                 dist = dist_2d
             
             # Actualizar datos de Ubot con distancia y ángulo
-            if r1 in datos_robots:
-                datos_robots[r1].dist = round(dist,2)
-                datos_robots[r1].ang = round(ang1,1)
+            if r1 in datos_ubot:
+                datos_ubot[r1].dist = round(dist,2)
+                datos_ubot[r1].ang = round(ang1,1)
             
-            if r2 in datos_robots:
-                datos_robots[r2].dist = round(dist,2)
-                datos_robots[r2].ang = round(ang2,1)
+            if r2 in datos_ubot:
+                datos_ubot[r2].dist = round(dist,2)
+                datos_ubot[r2].ang = round(ang2,1)
             
             # Dibujar línea entre robots
             if r1 in robot_data and r2 in robot_data:
@@ -162,6 +163,18 @@ def vision_loop():
                            f"D:{dist*100:.1f}cm A:{ang1:.1f}°",
                            (mid_x, mid_y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+                
+        # Envío de datos a robots vía RobotComm cada 1 segundo
+        if frame_count % int(TARGET_FPS) == 0:
+            for ubot_id, ubot in datos_ubot.items():
+                RobotCommInstance.enviarRobot(
+                    id_robot=ubot_id,
+                    ang=ubot.ang,
+                    dist=ubot.dist,
+                    out=ubot.Out
+                )
+                ubot.comm_ok = RobotCommInstance.recibirRespuesta()
+
         
         # ===== INFORMACIÓN EN PANTALLA =====
         y_offset = 30
@@ -184,8 +197,8 @@ def vision_loop():
         y_offset += 30
         
         # Estado de cada robot
-        if datos_robots:
-            for robot_id, robot in datos_robots.items():
+        if datos_ubot:
+            for robot_id, robot in datos_ubot.items():
                 status_text = "FUERA" if robot.Out == 1 else "DENTRO"
                 comm_text = "OK" if robot.comm_ok else "ERROR"
                 color = (0, 0, 255) if robot.Out == 1 else (0, 255, 0)
@@ -207,6 +220,7 @@ def vision_loop():
         key = cv2.waitKey(1) & 0xFF
         if key == 27:  # ESC
             print("\nSaliendo del sistema...")
+            exit_event.set()  # ✅ Señalizar salida
             break
         elif key == 114:  # 'r'
             ring_detector.corner_filter.reset()
@@ -214,7 +228,7 @@ def vision_loop():
         elif key == 112:  # 'p'
             print("\n" + "="*50)
             print("ESTADO DE ROBOTS:")
-            for robot_id, robot in datos_robots.items():
+            for robot_id, robot in datos_ubot.items():
                 status = "FUERA" if robot.Out == 1 else "DENTRO"
                 comm_status = "OK" if robot.comm_ok else "ERROR"
                 print(f"  Robot {robot_id}:")
@@ -224,16 +238,17 @@ def vision_loop():
                 print(f"    Comunicación: {comm_status}")
             print("="*50)
         elif key == 13:  # ENTER
-            print(datos_robots[0])
-            # Enviar datos al robot
-            robot = datos_robots[0]
-            RobotCommInstance.enviarRobot(
-                id_robot=robot_id,
-                ang=robot.ang,
-                dist=robot.dist,
-                out=robot.Out
-            )
-            datos_robots[0].comm_ok = RobotCommInstance.recibirRespuesta()
+            if datos_ubot:
+                print(datos_ubot[0])
+                # Enviar datos al robot
+                ubot = datos_ubot[0]
+                RobotCommInstance.enviarRobot(
+                    id_robot=ubot.id,
+                    ang=ubot.ang,
+                    dist=ubot.dist,
+                    out=ubot.Out
+                )
+                datos_ubot[0].comm_ok = RobotCommInstance.recibirRespuesta()
         
         time.sleep(1.0 / TARGET_FPS)  # Limitar a 30 FPS
 
@@ -323,29 +338,40 @@ if __name__ == "__main__":
         # Arrancar el servidor Flask en el hilo principal
         print("\n" + "="*60)
         print("Iniciando servidor web en http://localhost:5000")
-        print("Presiona Ctrl+C para detener")
+        print("Presiona ESC en la ventana de visión para detener")
         print("="*60 + "\n")
         
-        interface.run_server(debug=False)
+        # ✅ Ejecutar Flask en un thread separado
+        t_flask = threading.Thread(target=lambda: interface.run_server(debug=False), daemon=True)
+        t_flask.start()
+        
+        # ✅ Esperar a que exit_event se señalice
+        while not exit_event.is_set():
+            time.sleep(0.1)
+        
+        print("\n[SEÑAL] Cerrando programa...")
         
     except KeyboardInterrupt:
         print("\n[CTRL+C] Deteniendo programa...")
+        exit_event.set()  
     except Exception as e:
         print(f"\n\nError inesperado: {e}")
         import traceback
         traceback.print_exc()
+        exit_event.set()  
     finally:
         # Liberar recursos
+        print("\nLiberando recursos...")
         if cap is not None:
             cap.release()
         cv2.destroyAllWindows()
         if RobotCommInstance is not None:
             RobotCommInstance.close()
         
-        print("\n✓ Sistema finalizado correctamente")
-        if datos_robots:
+        print("✓ Sistema finalizado correctamente")
+        if datos_ubot:
             print("\nEstado final de robots:")
-            for robot_id, robot in datos_robots.items():
+            for robot_id, robot in datos_ubot.items():
                 status = "FUERA" if robot.Out == 1 else "DENTRO"
                 comm_status = "OK" if robot.comm_ok else "ERROR"
                 print(f"  Robot {robot_id}: {status}, Dist={robot.dist*100:.1f}cm, Ang={robot.ang:.1f}°, Comm={comm_status}")
