@@ -95,6 +95,7 @@ class ArUcoDetector:
         Returns:
             list[Marker]: Lista de marcadores detectados
         """
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejected = self.detector.detectMarkers(image)
         markers = []
         base_marker = None
@@ -129,7 +130,7 @@ class ArUcoDetector:
 
     def get_robot_orientation(self, markers_dict, robot_id):
         """
-        Calcula la orientación de un robot basándose en sus dos marcadores.
+        Calcula la orientación de un robot basándose en alguno de sus marcadores.
         
         Args:
             markers_dict: Diccionario {marker_id: Marker}
@@ -224,9 +225,11 @@ class ArUcoDetector:
         marker_ids1 = self.robot_markers.get(robot_id1, [])
         marker_ids2 = self.robot_markers.get(robot_id2, [])
         
+        # Busca los marcadores presentes de cada robot
         present1 = [mid for mid in marker_ids1 if mid in markers_dict]
         present2 = [mid for mid in marker_ids2 if mid in markers_dict]
         
+        # Si no hay marcadores presentes para alguno de los robots, no se puede calcular
         if not present1 or not present2:
             return None
         
