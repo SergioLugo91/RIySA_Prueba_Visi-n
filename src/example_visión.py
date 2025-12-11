@@ -16,13 +16,15 @@ datos_ubot = {}
 frame_count = 0
 TARGET_FPS = 30.0
 ROBOT_MARKERS = {}
-exit_event = threading.Event()  # ✅ Evento para señalizar salida
+exit_event = threading.Event() 
+ang1_array = []
+ang2_array = []
 
 def vision_loop():
     """
     Bucle principal de visión que procesa frames y envía datos a robots.
     """
-    global frame_count, datos_ubot
+    global frame_count, datos_ubot, start_time
     
     print("✓ Iniciando bucle de visión...")
     
@@ -115,32 +117,12 @@ def vision_loop():
             r1 = pair_info['robot1']
             r2 = pair_info['robot2']
             dist = pair_info['distance']
-            ang1 = pair_info['angle1']
-            ang2 = pair_info['angle2']
-            
-            # NUEVA IMPLEMENTACIÓN: Calcular distancia usando homografía del ring
-            if homography is not None and r1 in robot_data and r2 in robot_data:
-                # Proyectar centros de robots a coordenadas del mundo (ring)
-                cx1, cy1 = robot_data[r1]['center']
-                cx2, cy2 = robot_data[r2]['center']
-                
-                # Convertir a coordenadas del mundo
-                p1 = np.array([cx1, cy1, 1.0], dtype=np.float32)
-                p2 = np.array([cx2, cy2, 1.0], dtype=np.float32)
-                
-                q1 = homography @ p1
-                q1 /= q1[2]
-                xw1, yw1 = float(q1[0]), float(q1[1])
-                
-                q2 = homography @ p2
-                q2 /= q2[2]
-                xw2, yw2 = float(q2[0]), float(q2[1])
-                
-                # Distancia en el plano del ring (2D)
-                dist_2d = np.sqrt((xw2 - xw1)**2 + (yw2 - yw1)**2)
-                
-                # Usar la distancia 2D en lugar de la 3D
-                dist = dist_2d
+            ang1 = pair_info['angle2']
+            ang2 = pair_info['angle1']
+
+            # Mediana para suavizar ángulos
+            ang1_array.append(pair_info['angle2'])
+            ang2_array.append(pair_info['angle1'])
             
             # Actualizar datos de Ubot con distancia y ángulo
             if r1 in datos_ubot:
@@ -164,8 +146,23 @@ def vision_loop():
                            (mid_x, mid_y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
                 
-        # Envío de datos a robots vía RobotComm cada 1 segundo
+        # Envío de datos a robots vía RobotComm cada 5 segundos
         if frame_count % int(TARGET_FPS) == 0:
+            time_elapsed = time.time() - start_time
+            print(f"\n[ENVÍO DATOS] Tiempo transcurrido: {time_elapsed:.1f}s")
+            start_time = time.time()
+            ang1 = np.median(ang1_array)
+            std1 = np.std(ang1_array)
+            datos_ubot[r1].ang = round(ang1,1)
+        
+            ang2 = np.median(ang2_array)
+            std2 = np.std(ang2_array)
+            datos_ubot[r2].ang = round(ang2,1)
+        
+            print(f"[DEBUG] Array ang2 {r2}: {ang2_array}°: size: {len(ang2_array)} : std: {std2:.2f})")
+            print(f"[DEBUG] Array ang1 {r1}: {ang1_array}°: size: {len(ang1_array)} : std: {std1:.2f})")
+            ang1_array.clear()
+            ang2_array.clear()
             for ubot_id, ubot in datos_ubot.items():
                 RobotCommInstance.enviarRobot(
                     id_robot=ubot_id,
@@ -173,7 +170,7 @@ def vision_loop():
                     dist=ubot.dist,
                     out=ubot.Out
                 )
-                ubot.comm_ok = RobotCommInstance.recibirRespuesta()
+                #ubot.comm_ok = RobotCommInstance.recibirRespuesta()
 
         
         # ===== INFORMACIÓN EN PANTALLA =====
@@ -239,22 +236,36 @@ def vision_loop():
             print("="*50)
         elif key == 13:  # ENTER
             if datos_ubot:
-                print(datos_ubot[0])
-                # Enviar datos al robot
-                ubot = datos_ubot[0]
-                RobotCommInstance.enviarRobot(
-                    id_robot=ubot.id,
-                    ang=ubot.ang,
-                    dist=ubot.dist,
-                    out=ubot.Out
-                )
-                datos_ubot[0].comm_ok = RobotCommInstance.recibirRespuesta()
+                for pair_info in robot_info['robot_pairs']:
+                    r1 = pair_info['robot1']
+                    r2 = pair_info['robot2']
+                    
+                    ang1 = np.median(ang1_array)
+                    ang2 = np.median(ang2_array)
+
+                    datos_ubot[r1].ang = round(ang1,1)
+                    datos_ubot[r2].ang = round(ang2,1)
+
+                    # Enviar datos
+                    for robot_id in [r1, r2]:
+                        ang1_array.clear()
+                        ang2_array.clear()
+                        if robot_id in datos_ubot:
+                            ubot = datos_ubot[robot_id]
+                            print(f"[MANUAL] Robot {robot_id}: ang={ubot.ang}°, dist={ubot.dist:.1f}cm, out={ubot.Out}")
+                            RobotCommInstance.enviarRobot(
+                                id_robot=ubot.id,
+                                ang=ubot.ang,
+                                dist=ubot.dist,
+                                out=ubot.Out
+                            )
         
         time.sleep(1.0 / TARGET_FPS)  # Limitar a 30 FPS
 
 
 if __name__ == "__main__":
     try:
+        start_time = time.time()
         # Configuración
         CALIBRATION_PATH = "calibracion/cam_calib_data.npz"
         CAM_ID = 0  # ID de la cámara
@@ -374,6 +385,6 @@ if __name__ == "__main__":
             for robot_id, robot in datos_ubot.items():
                 status = "FUERA" if robot.Out == 1 else "DENTRO"
                 comm_status = "OK" if robot.comm_ok else "ERROR"
-                print(f"  Robot {robot_id}: {status}, Dist={robot.dist*100:.1f}cm, Ang={robot.ang:.1f}°, Comm={comm_status}")
+                print(f"  Robot {robot_id}: {status}, Dist={robot.dist:.1f}cm, Ang={robot.ang:.1f}°, Comm={comm_status}")
         print("✓ Recursos liberados")
         sys.exit(0)

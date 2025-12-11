@@ -255,11 +255,10 @@ class ArUcoDetector:
         if M1 is None or M2 is None:
             raise ValueError("get_rt_matrix devolvió None para uno de los marcadores (revisar rvec/tvec y sus dtypes)")
 
-        # Si no se proporciona un marcador base, trabajamos en el sistema de cámara/world tal como
-        # lo devuelven las matrices RT de los marcadores (no hacemos transformación adicional).
+        # Si no se proporciona un marcador base externo, no se puede calcular el ángulo
         if base is None:
-            M1_in_base = M1
-            M2_in_base = M2
+            print(f"[ERROR] No hay base para calcular ángulos entre robots.")
+            return None
         else:
             M_Base = self.get_rt_matrix(rvec_base, tvec_base)
             if M_Base is None:
@@ -317,9 +316,11 @@ class ArUcoDetector:
 
         # Distancia entre robots
         distance = self.calculate_distance_between_positions(t1_in_base, t2_in_base)
-        
+        distance_cm = distance * 100  # Convertir de metros a centímetros
+        #print(f"[DEBUG] Distancia entre Robot {robot_id1} y Robot {robot_id2}: {distance_cm:.2f} cm, Ángulo1: {angle1:.2f}°, Ángulo2: {angle2:.2f}°")
+
         return {
-            'distance': distance,
+            'distance': distance_cm,
             'angle1': angle1,
             'angle2': angle2
         }

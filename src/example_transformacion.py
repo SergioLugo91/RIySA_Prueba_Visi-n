@@ -2,7 +2,6 @@ import math
 import cv2
 import numpy as np
 import sys
-import time
 from dataclasses import dataclass
 
 @dataclass
@@ -96,66 +95,60 @@ if __name__ == "__main__":
         
         markers = []
         base_marker = None
-        start = time.time()
 
         while 1:
-            # Capturar frame cada 1 segundo
             ret, frame = cap.read()
-            cv2.imshow("Camara", frame)
 
-            #if time.time() - start >= 1.0 :
-                #ret, frame = cap.read()
-                #gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-#
-                ## Detectar marcadores
-                #image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                #corners, ids, rejected = detector.detectMarkers(image)
-#
-                #if ids is not None:
-                #    for i, c in enumerate(corners):
-                #        marker_id = int(ids[i][0])
-                #        center_x = int(np.mean(c[0][:, 0]))
-                #        center_y = int(np.mean(c[0][:, 1]))
-#
-                #        # Calcular pose del marcador
-                #        success, rvec, tvec = cv2.solvePnP(
-                #            obj_points, c,cam_matrix, dist_coeffs
-                #        )
-                #        if success:
-                #            m = Marker(
-                #                id=marker_id,
-                #                corners=c,
-                #                center=(center_x, center_y),
-                #                rvec=rvec,
-                #                tvec=tvec
-                #            )
-                #            markers.append(m)
-#
-                #            # Detectar marcador base (IDs 0 o 1). Preferimos 0 sobre 1 si ambos aparecen.
-                #            if marker_id in (0, 1):
-                #                if base_marker is None or marker_id == 0:
-                #                    base_marker = m
-#
-                #        cv2.aruco.drawDetectedMarkers(frame, corners, ids)
-                #        cv2.drawFrameAxes(frame, cam_matrix, dist_coeffs, rvec, tvec, 0.03)
-#
-                #if base_marker is not None:
-                #    frame_axes = frame.copy()  # ventana separada
-                #    for m in markers:
-                #        if m.id != base_marker.id:
-                #            rvec_trans, tvec_trans = transformar_ejes_a_base(
-                #                m.rvec, m.tvec, base_marker.rvec, base_marker.tvec
-                #            )
-                #            cv2.drawFrameAxes(frame_axes, cam_matrix, dist_coeffs, rvec_trans, tvec_trans, marker_length/2)
-#
-                    # Mostrar ventanas separadas
-                    #cv2.imshow("Camara", frame)
-                    #cv2.imshow("Ejes transformados", frame_axes)
-                
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-                #start = time.time()
+            # Cargar datos de calibración
+            with np.load(CALIBRATION_PATH) as X:
+                mtx, dist = X['mtx'], X['dist']
 
-            
+            # Detectar marcadores
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            corners, ids, rejected = detector.detectMarkers(image)
+
+            if ids is not None:
+                for i, c in enumerate(corners):
+                    marker_id = int(ids[i][0])
+                    center_x = int(np.mean(c[0][:, 0]))
+                    center_y = int(np.mean(c[0][:, 1]))
+
+                    # Calcular pose del marcador
+                    success, rvec, tvec = cv2.solvePnP(
+                        obj_points, c,cam_matrix, dist_coeffs
+                    )
+                    if success:
+                        m = Marker(
+                            id=marker_id,
+                            corners=c,
+                            center=(center_x, center_y),
+                            rvec=rvec,
+                            tvec=tvec
+                        )
+                        markers.append(m)
+
+                        # Detectar marcador base (IDs 0 o 1). Preferimos 0 sobre 1 si ambos aparecen.
+                        if marker_id in (0, 1):
+                            if base_marker is None or marker_id == 0:
+                                base_marker = m
+
+                    cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+                    cv2.drawFrameAxes(frame, cam_matrix, dist_coeffs, rvec, tvec, 0.03)
+
+            if base_marker is not None:
+                frame_axes = frame.copy()  # ventana separada
+                for m in markers:
+                    if m.id != base_marker.id:
+                        rvec_trans, tvec_trans = transformar_ejes_a_base(
+                            m.rvec, m.tvec, base_marker.rvec, base_marker.tvec
+                        )
+                        cv2.drawFrameAxes(frame_axes, cam_matrix, dist_coeffs, rvec_trans, tvec_trans, 0.03)
+
+                # Mostrar ventanas separadas
+                cv2.imshow("Camara", frame)
+                cv2.imshow("Ejes transformados", frame_axes)
         
     except KeyboardInterrupt:
         print("\n[CTRL+C] Deteniendo programa...")
