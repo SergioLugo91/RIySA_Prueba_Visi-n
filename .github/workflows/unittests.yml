@@ -10,18 +10,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Repository auschecken
+      - name: checout Repository
         uses: actions/checkout@v4
 
-      - name: Python installieren
+      - name: install Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Abhängigkeiten installieren
+      - name: install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Tests ausführen
+      - name: run tests 
         run: pytest
