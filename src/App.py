@@ -43,7 +43,7 @@ class Interface:
         """Configura las rutas de Flask."""
         @self.app.route('/')
         def index():
-            return render_template('index.html', 
+            return render_template("index.html", 
                                    states=self.robot_comm.robot_states,
                                    comm_status=self.robot_comm.robot_comm_status)
 

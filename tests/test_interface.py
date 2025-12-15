@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from App import Interface   # << dein Modul importieren
+from src.App import Interface   
 import cv2
 import numpy as np
 
