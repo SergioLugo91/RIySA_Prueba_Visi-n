@@ -148,29 +148,35 @@ def vision_loop():
                 
         # Envío de datos a robots vía RobotComm cada 5 segundos
         if frame_count % int(TARGET_FPS) == 0:
-            time_elapsed = time.time() - start_time
-            print(f"\n[ENVÍO DATOS] Tiempo transcurrido: {time_elapsed:.1f}s")
-            start_time = time.time()
-            ang1 = np.median(ang1_array)
-            std1 = np.std(ang1_array)
-            datos_ubot[r1].ang = round(ang1,1)
-        
-            ang2 = np.median(ang2_array)
-            std2 = np.std(ang2_array)
-            datos_ubot[r2].ang = round(ang2,1)
-        
-            print(f"[DEBUG] Array ang2 {r2}: {ang2_array}°: size: {len(ang2_array)} : std: {std2:.2f})")
-            print(f"[DEBUG] Array ang1 {r1}: {ang1_array}°: size: {len(ang1_array)} : std: {std1:.2f})")
-            ang1_array.clear()
-            ang2_array.clear()
-            for ubot_id, ubot in datos_ubot.items():
-                RobotCommInstance.enviarRobot(
-                    id_robot=ubot_id,
-                    ang=ubot.ang,
-                    dist=ubot.dist,
-                    out=ubot.Out
-                )
-                #ubot.comm_ok = RobotCommInstance.recibirRespuesta()
+            if datos_ubot is not None:
+                try:
+                    time_elapsed = time.time() - start_time
+                    print(f"\n[ENVÍO DATOS] Tiempo transcurrido: {time_elapsed:.1f}s")
+                    start_time = time.time()
+                    ang1 = np.median(ang1_array)
+                    std1 = np.std(ang1_array)
+                    datos_ubot[r1].ang = round(ang1,1)
+                
+                    ang2 = np.median(ang2_array)
+                    std2 = np.std(ang2_array)
+                    datos_ubot[r2].ang = round(ang2,1)
+                
+                    print(f"[DEBUG] Array ang2 {r2}: {ang2_array}°: size: {len(ang2_array)} : std: {std2:.2f})")
+                    print(f"[DEBUG] Array ang1 {r1}: {ang1_array}°: size: {len(ang1_array)} : std: {std1:.2f})")
+                    ang1_array.clear()
+                    ang2_array.clear()
+                    for ubot_id, ubot in datos_ubot.items():
+                        RobotCommInstance.enviarRobot(
+                            id_robot=ubot_id,
+                            ang=ubot.ang,
+                            dist=ubot.dist,
+                            out=ubot.Out
+                        )
+                        #ubot.comm_ok = RobotCommInstance.recibirRespuesta()
+                except Exception as e:
+                    print(f"[ERROR] Al enviar datos a robots: {e}")
+            else:
+                print("\n[ENVÍO DATOS] No hay datos de robots para enviar")
 
         
         # ===== INFORMACIÓN EN PANTALLA =====
