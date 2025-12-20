@@ -293,7 +293,7 @@ if __name__ == "__main__":
         
         # Abrir la cámara PRIMERO
         print("\nAbriendo cámara...")
-        cap = cv2.VideoCapture(CAM_ID)
+        cap = cv2.VideoCapture(CAM_ID, cv2.CAP_DSHOW)
         
         if not cap.isOpened():
             print("ERROR: No se puede abrir la cámara")
@@ -326,7 +326,7 @@ if __name__ == "__main__":
         )
         
         robot_detector = ArUcoDetector(
-            marker_length=0.048,
+            marker_length=0.076,
             cam_id=CAM_ID,
             target_fps=TARGET_FPS,
             calibration_path=CALIBRATION_PATH,

@@ -19,7 +19,7 @@ class ArUcoDetector:
     - Gestión de robots con dos marcadores cada uno
     - Cálculo de distancia y ángulo entre robots
     """
-    def __init__(self, marker_length=0.05, cam_id=0, target_fps=30.0,
+    def __init__(self, marker_length=0.076, cam_id=0, target_fps=30.0,
                  calibration_path="calibracion/cam_calib_data.npz",
                  aruco_dict=cv2.aruco.DICT_6X6_250,
                  robot_markers=None):
@@ -41,10 +41,10 @@ class ArUcoDetector:
         # Diccionario por defecto: cada robot tiene 2 marcadores ArUco
         if robot_markers is None:
             self.robot_markers = {
-                1: [2, 3],    # Robot 1: ArUco IDs 2 y 3
-                2: [4, 5],    # Robot 2: ArUco IDs 4 y 5
-                3: [6, 7],    # Robot 3: ArUco IDs 6 y 7
-            }
+            0: [2, 3],    # Robot 0 usa ArUco IDs 2 y 3
+            1: [6, 7],    # Robot 1 usa ArUco IDs 4 y 5
+            2: [4, 5],    # Robot 2 usa ArUco IDs 6 y 7
+        }
         else:
             self.robot_markers = robot_markers
         
@@ -76,9 +76,12 @@ class ArUcoDetector:
 
     def load_calibration_data(self):
         """Carga los datos de calibración de la cámara"""
-        data = np.load(self.calibration_path)
-        cam_matrix = data["K"].astype(np.float32)
-        dist_coeffs = data["D"].astype(np.float32)
+        cam_matrix = np.array([
+            [811.190329608064, 0, 304.044574492494],
+            [0, 807.950042818991, 224.991673688224],
+            [0, 0, 1]
+        ], dtype=np.float32)
+        dist_coeffs = np.array([0.000464623904805219, -0.0394572576121102, 0, 0, 0], dtype=np.float32)
         print("Matriz de calibración cargada:")
         print(cam_matrix)
         print("Coeficientes de distorsión:")
@@ -238,10 +241,10 @@ class ArUcoDetector:
         
         try:
             if base is not None:
-                tvec_base = base.tvec.flatten()
+                tvec_base = base.tvec
                 rvec_base = base.rvec
-            tvec1 = marker1.tvec.flatten()
-            tvec2 = marker2.tvec.flatten()
+            tvec1 = marker1.tvec
+            tvec2 = marker2.tvec
             rvec1 = marker1.rvec
             rvec2 = marker2.rvec
         except Exception as e:
@@ -305,14 +308,20 @@ class ArUcoDetector:
         az_v21 = math.atan2(v_21_xy[1], v_21_xy[0])
 
         # Diferencia angular en grados
-        angle1 = self.normalize_angle_deg(np.degrees(az_v12 - az_n1))
-        angle2 = self.normalize_angle_deg(np.degrees(az_v21 - az_n2))
+        angle1 = np.degrees(az_v12 - az_n1)
+        angle2 = np.degrees(az_v21 - az_n2)
 
         # Ajustar ángulos si es el aruco trasero
         if marker1.id == marker_ids1[0]:
-            angle1 = self.normalize_angle_deg(angle1 + 180.0)
+            print(f"[DEBUG] Marker trasero Robot {robot_id1} detectado (ID {marker1.id})")
+            angle1 = (angle1 + 180.0)
         if marker2.id == marker_ids2[0]:
-            angle2 = self.normalize_angle_deg(angle2 + 180.0)
+            print(f"[DEBUG] Marker trasero Robot {robot_id2} detectado (ID {marker2.id})")
+            angle2 = (angle2 + 180.0)
+
+        # Diferencia angular en grados
+        angle1 = self.normalize_angle_deg(np.degrees(az_v12 - az_n1))
+        angle2 = self.normalize_angle_deg(np.degrees(az_v21 - az_n2))
 
         # Distancia entre robots
         distance = self.calculate_distance_between_positions(t1_in_base, t2_in_base)
