@@ -280,7 +280,7 @@ class ArUcoDetector:
         # Posiciciones en el sistema base
         pos_1 = M1_in_base[0:3, 3]
         pos_2 = M2_in_base[0:3, 3]
-        v_12 = pos_2 - pos_1
+        vector_12 = pos_2 - pos_1
 
         n_1 = M1_in_base[0:3, 2]  # eje Z del robot 1 en base
         n_2 = M2_in_base[0:3, 2]  # eje Z del robot 2 en base
@@ -288,7 +288,7 @@ class ArUcoDetector:
         # Proyecciones de las normales y del vector entre robots en el plano XY del sistema base
         n_1_xy = np.array([n_1[0], n_1[1], 0.0])
         n_2_xy = np.array([n_2[0], n_2[1], 0.0])
-        v_12_xy = np.array([v_12[0], v_12[1], 0.0])
+        v_12_xy = np.array([vector_12[0], vector_12[1], 0.0])
         v_21_xy = -v_12_xy
 
         # Normalizar vectores
@@ -314,14 +314,14 @@ class ArUcoDetector:
         # Ajustar ángulos si es el aruco trasero
         if marker1.id == marker_ids1[0]:
             print(f"[DEBUG] Marker trasero Robot {robot_id1} detectado (ID {marker1.id})")
-            angle1 = (angle1 + 180.0)
+            angle1 += 180.0
         if marker2.id == marker_ids2[0]:
             print(f"[DEBUG] Marker trasero Robot {robot_id2} detectado (ID {marker2.id})")
-            angle2 = (angle2 + 180.0)
+            angle2 += 180.0
 
-        # Diferencia angular en grados
-        angle1 = self.normalize_angle_deg(np.degrees(az_v12 - az_n1))
-        angle2 = self.normalize_angle_deg(np.degrees(az_v21 - az_n2))
+        # Normalizar a rango [-180, 180] para ambos ángulos
+        angle1 = self.normalize_angle_deg(angle1)
+        angle2 = self.normalize_angle_deg(angle2)
 
         # Distancia entre robots
         distance = self.calculate_distance_between_positions(t1_in_base, t2_in_base)
@@ -339,6 +339,27 @@ class ArUcoDetector:
     def normalize_angle_deg(a):
         """Normaliza ángulo a rango [-180, 180] grados"""
         return ((a + 180) % 360) - 180
+
+    @staticmethod
+    def select_active_pair(robot_pairs, ubots):
+        """Selecciona el par a usar según robots dentro/fuera.
+
+        Regla:
+        - Si hay al menos dos con Out == 0, usa el primer par entre dos 'dentro'.
+        - Si solo hay uno dentro, usa el primer par que lo conecta con otro robot.
+        - Si no hay dentro, no selecciona par.
+        """
+        inside = {rid for rid, u in ubots.items() if getattr(u, 'Out', 1) == 0}
+        if len(inside) >= 2:
+            for p in robot_pairs:
+                if p['robot1'] in inside and p['robot2'] in inside:
+                    return p
+        elif len(inside) == 1:
+            inside_id = next(iter(inside))
+            for p in robot_pairs:
+                if p['robot1'] == inside_id or p['robot2'] == inside_id:
+                    return p
+        return None
 
     def process_frame(self, frame, base_marker=None):
         """
