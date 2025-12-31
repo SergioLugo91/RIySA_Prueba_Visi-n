@@ -135,12 +135,12 @@ def vision_loop():
             if (r1, r2) != active_pair_ids:
                 continue
             dist = pair_info['distance']
-            ang1 = pair_info['angle2']
-            ang2 = pair_info['angle1']
+            ang1 = pair_info['angle1']
+            ang2 = pair_info['angle2']
 
             # Mediana para suavizar ángulos
-            ang1_array.append(pair_info['angle2'])
-            ang2_array.append(pair_info['angle1'])
+            ang1_array.append(pair_info['angle1'])
+            ang2_array.append(pair_info['angle2'])
             
             # Actualizar datos de Ubot con distancia y ángulo
             if r1 in datos_ubot:
@@ -194,13 +194,9 @@ def vision_loop():
                     ang2_array.clear()
 
                     for ubot_id, ubot in datos_ubot.items():
-                        RobotCommInstance.enviarRobot(
-                            id_robot=ubot_id,
-                            ang=ubot.ang,
-                            dist=ubot.dist,
-                            out=ubot.Out
-                        )
-                        #ubot.comm_ok = RobotCommInstance.recibirRespuesta()
+                        RobotCommInstance.enviarRobot(ubot_id,ubot.ang,ubot.dist,ubot.Out)
+                        time.sleep(0.2)
+                        ubot.comm_ok = RobotCommInstance.recibirRespuesta()
                 except Exception as e:
                     print(f"[ERROR] Al enviar datos a robots: {e}")
             else:
@@ -356,7 +352,7 @@ if __name__ == "__main__":
         ring_detector = RingDetector(
             width=0.80,
             height=0.80,
-            marker_length=0.09,
+            marker_length=0.14,
             id_a=0,
             id_b=1,
             offset_a=(0.0, 0.03),
@@ -377,7 +373,7 @@ if __name__ == "__main__":
         
         # Configurar comunicación con robots
         print("\nConfigurando comunicación con robots...")
-        RobotCommInstance = RobotComm(logfile="robot_datalog.txt")
+        RobotCommInstance = RobotComm(ip="192.168.137.161", logfile="robot_datalog.txt")
         RobotCommInstance.addRobot(0)
         RobotCommInstance.addRobot(1)
         RobotCommInstance.addRobot(2)

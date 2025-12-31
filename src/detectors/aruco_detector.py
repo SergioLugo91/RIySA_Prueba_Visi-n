@@ -272,6 +272,10 @@ class ArUcoDetector:
 
             M1_in_base = MBase_inv @ M1
             M2_in_base = MBase_inv @ M2
+            #print("M1 en coordenadas base:")
+            #print(M1_in_base)
+            #print("M2 en coordenadas base: ")
+            #print(M2_in_base)
 
         # Extraer vector de traslación (3x1) en el sistema base
         t1_in_base = M1_in_base[0:3, 3].reshape(3,1)
@@ -301,27 +305,37 @@ class ArUcoDetector:
         v_12_xy = safe_normalize(v_12_xy)
         v_21_xy = safe_normalize(v_21_xy)
 
-        # Ángulos (azimut) de cada vector
-        az_n1 = math.atan2(n_1_xy[1], n_1_xy[0])
-        az_v12 = math.atan2(v_12_xy[1], v_12_xy[0])
-        az_n2 = math.atan2(n_2_xy[1], n_2_xy[0])
-        az_v21 = math.atan2(v_21_xy[1], v_21_xy[0])
+        # Preparar vectores "frente" por robot (si el marcador es trasero, se invierte)
+        is_rear1 = (marker1.id == marker_ids1[0])
+        is_rear2 = (marker2.id == marker_ids2[0])
 
-        # Diferencia angular en grados
-        angle1 = np.degrees(az_v12 - az_n1)
-        angle2 = np.degrees(az_v21 - az_n2)
-
-        # Ajustar ángulos si es el aruco trasero
-        if marker1.id == marker_ids1[0]:
+        if is_rear1:
             print(f"[DEBUG] Marker trasero Robot {robot_id1} detectado (ID {marker1.id})")
-            angle1 += 180.0
-        if marker2.id == marker_ids2[0]:
+        if is_rear2:
             print(f"[DEBUG] Marker trasero Robot {robot_id2} detectado (ID {marker2.id})")
-            angle2 += 180.0
+
+        f1_xy = -n_1_xy if is_rear1 else n_1_xy
+        f2_xy = -n_2_xy if is_rear2 else n_2_xy
+
+        # Ángulo firmado entre el frente del robot y el vector hacia el otro robot
+        def signed_angle_deg(a_xy, b_xy):
+            cross_z = a_xy[0]*b_xy[1] - a_xy[1]*b_xy[0]
+            dot_ab  = a_xy[0]*b_xy[0] + a_xy[1]*b_xy[1]
+            return np.degrees(math.atan2(cross_z, dot_ab))
+
+        # Robot 1: frente f1 con vector hacia 2
+        angle_r1 = signed_angle_deg(f1_xy, v_12_xy)
+        # Robot 2: frente f2 con vector hacia 1
+        angle_r2 = signed_angle_deg(f2_xy, v_21_xy)
+
+        # Ajuste de convención de signo: en OpenCV el eje Y crece hacia abajo,
+        # lo que invierte el signo si se desea convención matemática (Y hacia arriba).
+        angle_r1 = -angle_r1
+        angle_r2 = -angle_r2
 
         # Normalizar a rango [-180, 180] para ambos ángulos
-        angle1 = self.normalize_angle_deg(angle1)
-        angle2 = self.normalize_angle_deg(angle2)
+        angle_r1 = self.normalize_angle_deg(angle_r1)
+        angle_r2 = self.normalize_angle_deg(angle_r2)
 
         # Distancia entre robots
         distance = self.calculate_distance_between_positions(t1_in_base, t2_in_base)
@@ -330,8 +344,8 @@ class ArUcoDetector:
 
         return {
             'distance': distance_cm,
-            'angle1': angle1,
-            'angle2': angle2
+            'angle1': angle_r1,
+            'angle2': angle_r2
         }
 
 
