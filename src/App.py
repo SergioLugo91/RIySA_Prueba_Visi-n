@@ -1,6 +1,11 @@
 import time
 import cv2
 from flask import Flask, render_template, Response, redirect, url_for
+from RobPCComm.ComRobotLib import RobotComm
+import time
+import threading
+import cv2
+from utils.hand_control import HandControl
 
 class Interface:
     """Clase para manejar la interfaz web Flask del sistema de robots."""
@@ -18,6 +23,9 @@ class Interface:
         # Flask
         self.app = Flask(__name__)
         self._setup_routes()
+
+        #Hand Control
+        self.Recognizer = HandControl()
     
     def update_frame(self, frame):
         """
@@ -79,10 +87,7 @@ class Interface:
 
 
 if __name__ == "__main__":
-    from RobPCComm.ComRobotLib import RobotComm
-    import time
-    import threading
-    import cv2
+    
 
     # Crear instancia con datalog activo
     robot_comm = RobotComm(logfile="datalog.txt")
@@ -109,7 +114,7 @@ if __name__ == "__main__":
         cap.release()
         exit(1)
 
-    print(f"✓ Frame de prueba capturado: {test_frame.shape}")
+    #print(f"✓ Frame de prueba capturado: {test_frame.shape}")
 
     def comm_loop():
         i = 0
@@ -144,9 +149,12 @@ if __name__ == "__main__":
             ret, frame = cap.read()
             if ret:
                 interface.update_frame(frame)
+                # Hand Control
+                print(interface.Recognizer.recognize_gesture(frame))
                 frame_count += 1
                 if frame_count % 100 == 0:
                     print(f"Frames capturados: {frame_count}")
+
             else:
                 print("WARNING: No se pudo leer frame de la cámara")
                 time.sleep(0.1)  # Esperar un poco antes de reintentar
