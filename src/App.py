@@ -78,18 +78,6 @@ class Interface:
         self.app.run(host=host, port=port, debug=debug)
 
 
-# ---------------------
-# Dummy robot_comm
-# ---------------------
-class DummyComm:
-    def __init__(self):
-        self.robot_states = {"r1": "idle", "r2": "idle"}
-        self.robot_comm_status = "OK"
-
-    def log(self, title, msg):
-        print(title, msg)
-
-
 if __name__ == "__main__":
     from RobPCComm.ComRobotLib import RobotComm
     import time
