@@ -9,7 +9,7 @@ class HandControl:
         # -----------------------------
         # Configuration
         # -----------------------------  
-        self.MODEL_PATH = "C:/Users/ulisc/Workspace/rysa/gesture_recognizer.task"
+        self.MODEL_PATH = "src/models/gesture_recognizer.task"
 
         # -----------------------------
         # MediaPipe Setup (IMAGE Mode)
@@ -36,9 +36,6 @@ class HandControl:
 
         return gesture
     
-
-
-
 
 if __name__ == "__main__":
     # -----------------------------
