@@ -1,90 +1,73 @@
 import cv2
-import time
 import mediapipe as mp
-
-# Ziel-FPS für loop (ohne sleep(), nur Frame-Skipping)
-TARGET_FPS = 30
-last_frame_time = 0
-
-# MediaPipe Task-APIs
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-def get_gesture(frame):
-    base_options = python.BaseOptions(model_asset_path="C:/Users/ulisc/Workspace/rysa/gesture_recognizer.task")
-    options = vision.GestureRecognizerOptions(
-        base_options=base_options,
-        running_mode=vision.RunningMode.IMAGE,
-    )
 
-    recognizer = vision.GestureRecognizer.create_from_options(options)
-    # RGB-Bild für MediaPipe
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+class HandControl:
+    def __init__(self):
+        # -----------------------------
+        # Configuration
+        # -----------------------------  
+        self.MODEL_PATH = "C:/Users/ulisc/Workspace/rysa/gesture_recognizer.task"
 
+        # -----------------------------
+        # MediaPipe Setup (IMAGE Mode)
+        # -----------------------------
+        self.base_options = python.BaseOptions(model_asset_path=self.MODEL_PATH)
+        self.options = vision.GestureRecognizerOptions(
+            base_options=self.base_options,
+            running_mode=vision.RunningMode.IMAGE,
+        )
 
-    # Gesture Recognition
-    result = recognizer.recognize(mp_image)
+        self.recognizer = vision.GestureRecognizer.create_from_options(self.options)
 
-    if result.gestures:
-        gesture = result.gestures[0][0].category_name
-        if gesture == "Thumb_Up":
-            print("Daumen hoch", end="\r")
-        else:
-            print(gesture, end="\r")
+    def recognize_gesture(self,frame):
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(
+            image_format=mp.ImageFormat.SRGB,
+            data=rgb
+        )
 
-    cv2.imshow("Gesture Recognizer", frame)
+        result = self.recognizer.recognize(mp_image)
+        gesture = None
+        if result.gestures:
+            gesture = result.gestures[0][0].category_name
 
+        return gesture
     
-def main():
-    global last_frame_time
 
-    # Optionen + Modelldatei
-    base_options = python.BaseOptions(model_asset_path="C:/Users/ulisc/Workspace/rysa/gesture_recognizer.task")
-    options = vision.GestureRecognizerOptions(
-        base_options=base_options,
-        running_mode=vision.RunningMode.VIDEO,
-    )
 
-    recognizer = vision.GestureRecognizer.create_from_options(options)
 
+
+if __name__ == "__main__":
+    # -----------------------------
+    # Camera
+    # -----------------------------
+    FRAME_STEP = 5 
     cap = cv2.VideoCapture(0)
+    frame_index = 0
+
+    # Recognizer
+    Recognizer = HandControl()
 
     while True:
-        now = time.time()
-        if now - last_frame_time < 1.0 / TARGET_FPS:
-            continue
-        last_frame_time = now
-
         ret, frame = cap.read()
         if not ret:
             continue
 
-        # RGB-Bild für MediaPipe
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        # Only evlaluate every n-th frame
+        elif frame_index % FRAME_STEP == 0:
+            gesture = Recognizer.recognize_gesture(frame)
+            print(f"Geste: {gesture}", end="\r")
 
-        # Timestamp in ms
-        timestamp_ms = int(now * 1000)
+        frame_index += 1
 
-        # Gesture Recognition
-        result = recognizer.recognize_for_video(mp_image, timestamp_ms)
 
-        if result.gestures:
-            gesture = result.gestures[0][0].category_name
-            if gesture == "Thumb_Up":
-                print("Daumen hoch", end="\r")
-            else:
-                print(gesture, end="\r")
 
-        cv2.imshow("Gesture Recognizer", frame)
-
+        cv2.imshow("Gesture Recognizer (IMAGE Mode)", frame)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
     cap.release()
     cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    main()
