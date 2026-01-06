@@ -47,6 +47,16 @@ class Interface:
                            b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
             time.sleep(0.033)  # ~30 FPS
     
+    def start_fight_logic(self):
+        for rid in self.robot_comm.robot_states:
+            self.robot_comm.robot_states[rid] = "peleando"
+        self.robot_comm.log("PELEA →", "Se inició la pelea")
+
+    def stop_fight_logic(self):
+        for rid in self.robot_comm.robot_states:
+            self.robot_comm.robot_states[rid] = "fuera de combate"
+        self.robot_comm.log("PELEA →", "Se detuvo la pelea")
+
     def _setup_routes(self):
         """Configura las rutas de Flask."""
         @self.app.route('/')
@@ -59,19 +69,15 @@ class Interface:
         def video_feed():
             return Response(self.gen_frames(),
                             mimetype='multipart/x-mixed-replace; boundary=frame')
-
+        
         @self.app.route('/start')
         def start_fight():
-            for rid in self.robot_comm.robot_states:
-                self.robot_comm.robot_states[rid] = "peleando"
-            self.robot_comm.log("PELEA →", "Se inició la pelea")
+            self.start_fight_logic()
             return redirect(url_for('index'))
 
         @self.app.route('/stop')
         def stop_fight():
-            for rid in self.robot_comm.robot_states:
-                self.robot_comm.robot_states[rid] = "fuera de combate"
-            self.robot_comm.log("PELEA →", "Se detuvo la pelea")
+            self.stop_fight_logic()
             return redirect(url_for('index'))
     
     def run_server(self, host="0.0.0.0", port=5000, debug=True):
@@ -150,7 +156,11 @@ if __name__ == "__main__":
             if ret:
                 interface.update_frame(frame)
                 # Hand Control
-                print(interface.Recognizer.recognize_gesture(frame))
+                gesture = interface.Recognizer.recognize_gesture(frame)
+                print(gesture)
+                if gesture == "Thumb_Up":
+                    interface.start_fight_logic()
+                    
                 frame_count += 1
                 if frame_count % 100 == 0:
                     print(f"Frames capturados: {frame_count}")
