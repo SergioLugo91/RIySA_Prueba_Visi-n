@@ -5,16 +5,11 @@ import os
 import time
 
 
-<<<<<<< HEAD
 # ===================== CAPTURA DE DATOS =====================
 
 # Índice de la cámara (depende del sistema)
 CAM_INDEX = 1         
-=======
-CAM_INDEX = 0         
-RESOLUTION = (1280,720) # ajusta a tu cámara
-SAVE_DIR = "Calibracion/CaptCalibCamAlvaro3"      # carpeta de salida
->>>>>>> 26d044753dacded3ccd650bcabebbd0c17fcf5eb
+#CAM_INDEX = 0         
 
 # Resolución deseada de captura (ancho, alto)
 RESOLUTION = (1280, 720)
@@ -69,7 +64,6 @@ while True:
         # Incrementa contador
         i += 1
 
-<<<<<<< HEAD
         # Pequeño retardo para evitar capturas repetidas
         time.sleep(0.2)
 
@@ -89,12 +83,7 @@ SQUARE_SIZE = 32.0  # 3.2 cm
 
 # ===================== CARPETA DE IMÁGENES =====================
 
-# Carpeta que contiene las imágenes capturadas
-IMG_DIR = "Calibracion/CaptCalibCamAlvaro"
-=======
-# === CARPETA DE IMÁGENES ===
 IMG_DIR = "Calibracion/CaptCalibCamAlvaro3"
->>>>>>> 26d044753dacded3ccd650bcabebbd0c17fcf5eb
 
 
 # ===================== PUNTOS 3D DEL TABLERO =====================
@@ -214,11 +203,8 @@ print(K)
 print("Coeficientes de distorsión D:")
 print(D.ravel())
 
-<<<<<<< HEAD
-=======
 # === GUARDA LOS RESULTADOS ===
 np.savez("Calibracion/cam_calib_data3.npz", K=K, D=D, rms=ret)
->>>>>>> 26d044753dacded3ccd650bcabebbd0c17fcf5eb
 
 # ===================== GUARDADO DE RESULTADOS =====================
 
