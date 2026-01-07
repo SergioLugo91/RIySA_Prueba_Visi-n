@@ -19,6 +19,8 @@ ROBOT_MARKERS = {}
 exit_event = threading.Event() 
 ang1_array = []
 ang2_array = []
+inicio_combate = False  # Envío periódico habilitado tras confirmación del usuario
+active_pair_ids = None  # Par de robots actualmente considerado para ángulos/distancias
 
 def vision_loop():
     """
@@ -111,18 +113,34 @@ def vision_loop():
                            f"({xw:.2f},{yw:.2f})m {status}",
                            (cx + 15, cy),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+
+        # Elegir el par activo según estados inside/out
+        global active_pair_ids, inicio_combate
+        selected_pair = ArUcoDetector.select_active_pair(robot_info['robot_pairs'], datos_ubot)
+        selected_ids = None if selected_pair is None else (selected_pair['robot1'], selected_pair['robot2'])
+        if selected_ids != active_pair_ids:
+            if active_pair_ids is not None:
+                print(f"[INFO] Cambia par activo de {active_pair_ids} a {selected_ids}. Se pausa envío hasta confirmación.")
+            active_pair_ids = selected_ids
+            inicio_combate = False
+            ang1_array.clear()
+            ang2_array.clear()
         
         # Mostrar distancias y ángulos entre robots
         for pair_info in robot_info['robot_pairs']:
+            if active_pair_ids is None:
+                break
             r1 = pair_info['robot1']
             r2 = pair_info['robot2']
+            if (r1, r2) != active_pair_ids:
+                continue
             dist = pair_info['distance']
-            ang1 = pair_info['angle2']
-            ang2 = pair_info['angle1']
+            ang1 = pair_info['angle1']
+            ang2 = pair_info['angle2']
 
             # Mediana para suavizar ángulos
-            ang1_array.append(pair_info['angle2'])
-            ang2_array.append(pair_info['angle1'])
+            ang1_array.append(pair_info['angle1'])
+            ang2_array.append(pair_info['angle2'])
             
             # Actualizar datos de Ubot con distancia y ángulo
             if r1 in datos_ubot:
@@ -146,37 +164,43 @@ def vision_loop():
                            (mid_x, mid_y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
                 
-        # Envío de datos a robots vía RobotComm cada 5 segundos
-        if frame_count % int(TARGET_FPS) == 0:
-            if datos_ubot is not None:
+        # Envío de datos a robots vía RobotComm: requiere confirmación del usuario ('s')
+        if inicio_combate and frame_count % int(TARGET_FPS) == 0:
+            if datos_ubot is not None and active_pair_ids is not None:
+                r1, r2 = active_pair_ids
                 try:
                     time_elapsed = time.time() - start_time
-                    print(f"\n[ENVÍO DATOS] Tiempo transcurrido: {time_elapsed:.1f}s")
+                    print(f"\n[ENVÍO DATOS] Tiempo transcurrido: {time_elapsed:.1f}s | par {active_pair_ids}")
                     start_time = time.time()
-                    ang1 = np.median(ang1_array)
-                    std1 = np.std(ang1_array)
-                    datos_ubot[r1].ang = round(ang1,1)
-                
-                    ang2 = np.median(ang2_array)
-                    std2 = np.std(ang2_array)
-                    datos_ubot[r2].ang = round(ang2,1)
-                
-                    print(f"[DEBUG] Array ang2 {r2}: {ang2_array}°: size: {len(ang2_array)} : std: {std2:.2f})")
-                    print(f"[DEBUG] Array ang1 {r1}: {ang1_array}°: size: {len(ang1_array)} : std: {std1:.2f})")
+
+                    if ang1_array and ang2_array:
+                        ang1 = np.median(ang1_array)
+                        std1 = np.std(ang1_array)
+                        ang2 = np.median(ang2_array)
+                        std2 = np.std(ang2_array)
+                    else:
+                        ang1 = datos_ubot.get(r1, Ubot(r1,0,0,0,True)).ang
+                        ang2 = datos_ubot.get(r2, Ubot(r2,0,0,0,True)).ang
+                        std1 = std2 = 0.0
+
+                    if r1 in datos_ubot:
+                        datos_ubot[r1].ang = round(ang1,1)
+                    if r2 in datos_ubot:
+                        datos_ubot[r2].ang = round(ang2,1)
+
+                    print(f"[DEBUG] Array ang2 {r2}: {ang2_array}° size:{len(ang2_array)} std:{std2:.2f}")
+                    print(f"[DEBUG] Array ang1 {r1}: {ang1_array}° size:{len(ang1_array)} std:{std1:.2f}")
                     ang1_array.clear()
                     ang2_array.clear()
+
                     for ubot_id, ubot in datos_ubot.items():
-                        RobotCommInstance.enviarRobot(
-                            id_robot=ubot_id,
-                            ang=ubot.ang,
-                            dist=ubot.dist,
-                            out=ubot.Out
-                        )
-                        #ubot.comm_ok = RobotCommInstance.recibirRespuesta()
+                        RobotCommInstance.enviarRobot(ubot_id,ubot.ang,ubot.dist,ubot.Out)
+                        time.sleep(0.2)
+                        ubot.comm_ok = RobotCommInstance.recibirRespuesta()
                 except Exception as e:
                     print(f"[ERROR] Al enviar datos a robots: {e}")
             else:
-                print("\n[ENVÍO DATOS] No hay datos de robots para enviar")
+                print("\n[ENVÍO DATOS] Sin par activo o sin datos para enviar")
 
         
         # ===== INFORMACIÓN EN PANTALLA =====
@@ -240,31 +264,44 @@ def vision_loop():
                 print(f"    Ángulo: {robot.ang:.2f}°")
                 print(f"    Comunicación: {comm_status}")
             print("="*50)
+        elif key == 115:  # 's'
+            # Armar el envío periódico tras confirmación del usuario
+            if active_pair_ids is not None:
+                inicio_combate = True
+                ang1_array.clear()
+                ang2_array.clear()
+                start_time = time.time()
+                print(f"[INFO] Inicio de combate ARMADO para par {active_pair_ids}.")
+            else:
+                print("[INFO] No hay par activo para armar envío.")
         elif key == 13:  # ENTER
-            if datos_ubot:
-                for pair_info in robot_info['robot_pairs']:
-                    r1 = pair_info['robot1']
-                    r2 = pair_info['robot2']
-                    
+            # Envío MANUAL inmediato para el par activo (sin armar periódico)
+            if active_pair_ids is not None:
+                r1, r2 = active_pair_ids
+                if ang1_array and ang2_array:
                     ang1 = np.median(ang1_array)
                     ang2 = np.median(ang2_array)
+                else:
+                    ang1 = datos_ubot.get(r1, Ubot(r1,0,0,0,True)).ang
+                    ang2 = datos_ubot.get(r2, Ubot(r2,0,0,0,True)).ang
 
+                if r1 in datos_ubot:
                     datos_ubot[r1].ang = round(ang1,1)
+                if r2 in datos_ubot:
                     datos_ubot[r2].ang = round(ang2,1)
 
-                    # Enviar datos
-                    for robot_id in [r1, r2]:
-                        ang1_array.clear()
-                        ang2_array.clear()
-                        if robot_id in datos_ubot:
-                            ubot = datos_ubot[robot_id]
-                            print(f"[MANUAL] Robot {robot_id}: ang={ubot.ang}°, dist={ubot.dist:.1f}cm, out={ubot.Out}")
-                            RobotCommInstance.enviarRobot(
-                                id_robot=ubot.id,
-                                ang=ubot.ang,
-                                dist=ubot.dist,
-                                out=ubot.Out
-                            )
+                for robot_id in [r1, r2]:
+                    if robot_id in datos_ubot:
+                        ubot = datos_ubot[robot_id]
+                        print(f"[MANUAL] Robot {robot_id}: ang={ubot.ang}°, dist={ubot.dist:.1f}cm, out={ubot.Out}")
+                        RobotCommInstance.enviarRobot(
+                            id_robot=ubot.id,
+                            ang=ubot.ang,
+                            dist=ubot.dist,
+                            out=ubot.Out
+                        )
+            else:
+                print("[MANUAL] No hay par activo para envío manual.")
         
         time.sleep(1.0 / TARGET_FPS)  # Limitar a 30 FPS
 
@@ -293,7 +330,7 @@ if __name__ == "__main__":
         
         # Abrir la cámara PRIMERO
         print("\nAbriendo cámara...")
-        cap = cv2.VideoCapture(CAM_ID)
+        cap = cv2.VideoCapture(CAM_ID, cv2.CAP_DSHOW)
         
         if not cap.isOpened():
             print("ERROR: No se puede abrir la cámara")
@@ -315,7 +352,7 @@ if __name__ == "__main__":
         ring_detector = RingDetector(
             width=0.80,
             height=0.80,
-            marker_length=0.09,
+            marker_length=0.14,
             id_a=0,
             id_b=1,
             offset_a=(0.0, 0.03),
@@ -326,7 +363,7 @@ if __name__ == "__main__":
         )
         
         robot_detector = ArUcoDetector(
-            marker_length=0.048,
+            marker_length=0.076,
             cam_id=CAM_ID,
             target_fps=TARGET_FPS,
             calibration_path=CALIBRATION_PATH,
@@ -336,7 +373,7 @@ if __name__ == "__main__":
         
         # Configurar comunicación con robots
         print("\nConfigurando comunicación con robots...")
-        RobotCommInstance = RobotComm(logfile="robot_datalog.txt")
+        RobotCommInstance = RobotComm(ip="192.168.137.161", logfile="robot_datalog.txt")
         RobotCommInstance.addRobot(0)
         RobotCommInstance.addRobot(1)
         RobotCommInstance.addRobot(2)

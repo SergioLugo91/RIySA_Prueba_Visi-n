@@ -80,7 +80,8 @@ if __name__ == "__main__":
         detector_params = cv2.aruco.DetectorParameters()
         detector = cv2.aruco.ArucoDetector(dictionary, detector_params)
 
-        marker_length=0.055
+        #marker_length = 0.055
+        marker_length = 0.076
 
         obj_points = np.array([
             [-marker_length/2,  marker_length/2, 0],
@@ -91,8 +92,12 @@ if __name__ == "__main__":
 
 
         data = np.load("calibracion/cam_calib_data.npz")
-        cam_matrix = data["K"].astype(np.float32)
-        dist_coeffs = data["D"].astype(np.float32)
+        cam_matrix = np.array([
+            [811.190329608064, 0, 304.044574492494],
+            [0, 807.950042818991, 224.991673688224],
+            [0, 0, 1]
+        ], dtype=np.float32)
+        dist_coeffs = np.array([0.000464623904805219, -0.0394572576121102, 0, 0, 0])
         
         markers = []
         base_marker = None

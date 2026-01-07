@@ -19,7 +19,7 @@ class ArUcoDetector:
     - Gestión de robots con dos marcadores cada uno
     - Cálculo de distancia y ángulo entre robots
     """
-    def __init__(self, marker_length=0.05, cam_id=0, target_fps=30.0,
+    def __init__(self, marker_length=0.076, cam_id=0, target_fps=30.0,
                  calibration_path="calibracion/cam_calib_data.npz",
                  aruco_dict=cv2.aruco.DICT_6X6_250,
                  robot_markers=None):
@@ -41,10 +41,10 @@ class ArUcoDetector:
         # Diccionario por defecto: cada robot tiene 2 marcadores ArUco
         if robot_markers is None:
             self.robot_markers = {
-                1: [2, 3],    # Robot 1: ArUco IDs 2 y 3
-                2: [4, 5],    # Robot 2: ArUco IDs 4 y 5
-                3: [6, 7],    # Robot 3: ArUco IDs 6 y 7
-            }
+            0: [2, 3],    # Robot 0 usa ArUco IDs 2 y 3
+            1: [6, 7],    # Robot 1 usa ArUco IDs 4 y 5
+            2: [4, 5],    # Robot 2 usa ArUco IDs 6 y 7
+        }
         else:
             self.robot_markers = robot_markers
         
@@ -76,9 +76,12 @@ class ArUcoDetector:
 
     def load_calibration_data(self):
         """Carga los datos de calibración de la cámara"""
-        data = np.load(self.calibration_path)
-        cam_matrix = data["K"].astype(np.float32)
-        dist_coeffs = data["D"].astype(np.float32)
+        cam_matrix = np.array([
+            [811.190329608064, 0, 304.044574492494],
+            [0, 807.950042818991, 224.991673688224],
+            [0, 0, 1]
+        ], dtype=np.float32)
+        dist_coeffs = np.array([0.000464623904805219, -0.0394572576121102, 0, 0, 0], dtype=np.float32)
         print("Matriz de calibración cargada:")
         print(cam_matrix)
         print("Coeficientes de distorsión:")
@@ -238,10 +241,10 @@ class ArUcoDetector:
         
         try:
             if base is not None:
-                tvec_base = base.tvec.flatten()
+                tvec_base = base.tvec
                 rvec_base = base.rvec
-            tvec1 = marker1.tvec.flatten()
-            tvec2 = marker2.tvec.flatten()
+            tvec1 = marker1.tvec
+            tvec2 = marker2.tvec
             rvec1 = marker1.rvec
             rvec2 = marker2.rvec
         except Exception as e:
@@ -269,6 +272,10 @@ class ArUcoDetector:
 
             M1_in_base = MBase_inv @ M1
             M2_in_base = MBase_inv @ M2
+            #print("M1 en coordenadas base:")
+            #print(M1_in_base)
+            #print("M2 en coordenadas base: ")
+            #print(M2_in_base)
 
         # Extraer vector de traslación (3x1) en el sistema base
         t1_in_base = M1_in_base[0:3, 3].reshape(3,1)
@@ -277,7 +284,7 @@ class ArUcoDetector:
         # Posiciciones en el sistema base
         pos_1 = M1_in_base[0:3, 3]
         pos_2 = M2_in_base[0:3, 3]
-        v_12 = pos_2 - pos_1
+        vector_12 = pos_2 - pos_1
 
         n_1 = M1_in_base[0:3, 2]  # eje Z del robot 1 en base
         n_2 = M2_in_base[0:3, 2]  # eje Z del robot 2 en base
@@ -285,7 +292,7 @@ class ArUcoDetector:
         # Proyecciones de las normales y del vector entre robots en el plano XY del sistema base
         n_1_xy = np.array([n_1[0], n_1[1], 0.0])
         n_2_xy = np.array([n_2[0], n_2[1], 0.0])
-        v_12_xy = np.array([v_12[0], v_12[1], 0.0])
+        v_12_xy = np.array([vector_12[0], vector_12[1], 0.0])
         v_21_xy = -v_12_xy
 
         # Normalizar vectores
@@ -298,21 +305,37 @@ class ArUcoDetector:
         v_12_xy = safe_normalize(v_12_xy)
         v_21_xy = safe_normalize(v_21_xy)
 
-        # Ángulos (azimut) de cada vector
-        az_n1 = math.atan2(n_1_xy[1], n_1_xy[0])
-        az_v12 = math.atan2(v_12_xy[1], v_12_xy[0])
-        az_n2 = math.atan2(n_2_xy[1], n_2_xy[0])
-        az_v21 = math.atan2(v_21_xy[1], v_21_xy[0])
+        # Preparar vectores "frente" por robot (si el marcador es trasero, se invierte)
+        is_rear1 = (marker1.id == marker_ids1[0])
+        is_rear2 = (marker2.id == marker_ids2[0])
 
-        # Diferencia angular en grados
-        angle1 = self.normalize_angle_deg(np.degrees(az_v12 - az_n1))
-        angle2 = self.normalize_angle_deg(np.degrees(az_v21 - az_n2))
+        if is_rear1:
+            print(f"[DEBUG] Marker trasero Robot {robot_id1} detectado (ID {marker1.id})")
+        if is_rear2:
+            print(f"[DEBUG] Marker trasero Robot {robot_id2} detectado (ID {marker2.id})")
 
-        # Ajustar ángulos si es el aruco trasero
-        if marker1.id == marker_ids1[0]:
-            angle1 = self.normalize_angle_deg(angle1 + 180.0)
-        if marker2.id == marker_ids2[0]:
-            angle2 = self.normalize_angle_deg(angle2 + 180.0)
+        f1_xy = -n_1_xy if is_rear1 else n_1_xy
+        f2_xy = -n_2_xy if is_rear2 else n_2_xy
+
+        # Ángulo firmado entre el frente del robot y el vector hacia el otro robot
+        def signed_angle_deg(a_xy, b_xy):
+            cross_z = a_xy[0]*b_xy[1] - a_xy[1]*b_xy[0]
+            dot_ab  = a_xy[0]*b_xy[0] + a_xy[1]*b_xy[1]
+            return np.degrees(math.atan2(cross_z, dot_ab))
+
+        # Robot 1: frente f1 con vector hacia 2
+        angle_r1 = signed_angle_deg(f1_xy, v_12_xy)
+        # Robot 2: frente f2 con vector hacia 1
+        angle_r2 = signed_angle_deg(f2_xy, v_21_xy)
+
+        # Ajuste de convención de signo: en OpenCV el eje Y crece hacia abajo,
+        # lo que invierte el signo si se desea convención matemática (Y hacia arriba).
+        angle_r1 = -angle_r1
+        angle_r2 = -angle_r2
+
+        # Normalizar a rango [-180, 180] para ambos ángulos
+        angle_r1 = self.normalize_angle_deg(angle_r1)
+        angle_r2 = self.normalize_angle_deg(angle_r2)
 
         # Distancia entre robots
         distance = self.calculate_distance_between_positions(t1_in_base, t2_in_base)
@@ -321,8 +344,8 @@ class ArUcoDetector:
 
         return {
             'distance': distance_cm,
-            'angle1': angle1,
-            'angle2': angle2
+            'angle1': angle_r1,
+            'angle2': angle_r2
         }
 
 
@@ -330,6 +353,27 @@ class ArUcoDetector:
     def normalize_angle_deg(a):
         """Normaliza ángulo a rango [-180, 180] grados"""
         return ((a + 180) % 360) - 180
+
+    @staticmethod
+    def select_active_pair(robot_pairs, ubots):
+        """Selecciona el par a usar según robots dentro/fuera.
+
+        Regla:
+        - Si hay al menos dos con Out == 0, usa el primer par entre dos 'dentro'.
+        - Si solo hay uno dentro, usa el primer par que lo conecta con otro robot.
+        - Si no hay dentro, no selecciona par.
+        """
+        inside = {rid for rid, u in ubots.items() if getattr(u, 'Out', 1) == 0}
+        if len(inside) >= 2:
+            for p in robot_pairs:
+                if p['robot1'] in inside and p['robot2'] in inside:
+                    return p
+        elif len(inside) == 1:
+            inside_id = next(iter(inside))
+            for p in robot_pairs:
+                if p['robot1'] == inside_id or p['robot2'] == inside_id:
+                    return p
+        return None
 
     def process_frame(self, frame, base_marker=None):
         """

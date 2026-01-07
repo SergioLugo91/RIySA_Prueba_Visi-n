@@ -76,18 +76,13 @@ class RingDetector:
 
 
     def load_calibration_data(self):
-        """Carga los datos de calibración de la cámara desde un archivo .npz"""
-
-        # Carga el archivo de calibración
-        data = np.load(self.calibration_path)
-
-        # Matriz intrínseca de la cámara
-        cam_matrix = data["K"].astype(np.float32)
-
-        # Coeficientes de distorsión
-        dist_coeffs = data["D"].astype(np.float32)
-
-        # Muestra información por consola
+        """Carga los datos de calibración de la cámara"""
+        cam_matrix = np.array([
+            [811.190329608064, 0, 304.044574492494],
+            [0, 807.950042818991, 224.991673688224],
+            [0, 0, 1]
+        ], dtype=np.float32)
+        dist_coeffs = np.array([0.000464623904805219, -0.0394572576121102, 0, 0, 0], dtype=np.float32)
         print("Matriz de calibración cargada:")
         print(cam_matrix)
         print("Coeficientes de distorsión:")
