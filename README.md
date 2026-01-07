@@ -89,21 +89,20 @@ RIySA_Prueba_Visión/
     │• Gestiona lógica de combate         │
     └──────────────┬──────────────────────┘
                    │
-         ┌─────────┴──────────┐
-         │                    │
-         ▼                    ▼
-    ┌──────────────┐    ┌───────────────┐
-    │ RobotComm    │    │  Interface    │
-    │ (TCP/IP)     │    │  (Flask Web)  │
-    ├──────────────┤    ├───────────────┤
-    │• Envía datos │    │• Dashboard    │
-    │  a robots    │    │  en tiempo    │
-    │• Recibe      │    │  real         │
-    │  respuestas  │    │• Video stream │
-    └──────────────┘    └───────────────┘
-         │
-         ▼
-    ROBOTS FÍSICOS
+                   │                    
+                   ▼       
+            ┌──────────────┐    
+            │ RobotComm    │    
+            │ (TCP/IP)     │   
+            ├──────────────┤  
+            │• Envía datos │   
+            │  a robots    │   
+            │• Recibe      │  
+            │  respuestas  │
+            └──────────────┘    
+                    │
+                    ▼
+                ROBOTS FÍSICOS
 ```
 
 ---
@@ -171,10 +170,6 @@ RIySA_Prueba_Visión/
     - Envía datos de posición y control
     - Recibe confirmaciones de robots
     - Gestiona múltiples conexiones
-  - **`Interface`**: Interfaz web Flask
-    - Streaming de video en tiempo real
-    - Dashboard de control
-    - Monitoreo de estado
 
 ### 5. **Punto de Entrada Principal**
 
@@ -260,7 +255,6 @@ python src/example_visión.py
 
 3. Comunicación Paralela
    ├─ Thread de recepción de datos de robots
-   ├─ Thread de servidor web Flask
    └─ Thread principal de visión
 ```
 
@@ -318,13 +312,6 @@ for robot_id, robot_pose in robot_data.items():
 - **Multithreading**: Separación de visión, comunicación e interfaz web
 - **Comunicación**: TCP/IP a puerto personalizado
 - **Frecuencia**: 30 FPS objetivo para procesamiento
-
----
-
-## 📬 Contacto y Contribuciones
-
-Las contribuciones son bienvenidas. Por favor, abre un issue o pull request.
-
 ---
 
 **Última actualización**: Enero 2026
