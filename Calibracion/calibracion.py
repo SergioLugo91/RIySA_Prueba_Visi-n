@@ -209,12 +209,12 @@ np.savez("Calibracion/cam_calib_data3.npz", K=K, D=D, rms=ret)
 # ===================== GUARDADO DE RESULTADOS =====================
 
 # Guarda la calibración en un archivo .npz
-np.savez(
-    "Calibracion/cam_calib_data.npz",
-    K=K,
-    D=D,
-    rms=ret
-)
+# np.savez(
+#     "Calibracion/cam_calib_data.npz",
+#     K=K,
+#     D=D,
+#     rms=ret
+# )
 
 
 # ===================== PRUEBA VISUAL =====================
