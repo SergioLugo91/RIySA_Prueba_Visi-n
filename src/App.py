@@ -10,21 +10,25 @@ from utils.hand_control import HandControl
 class Interface:
     """Clase para manejar la interfaz web Flask del sistema de robots."""
     
-    def __init__(self, robot_comm):
+    def __init__(self, robot_comm, on_start_fight=None, on_stop_fight=None):
         """
         Inicializa la interfaz web.
         
         Args:
             robot_comm: Instancia de RobotComm para acceder a estados y log
+            on_start_fight: Callback opcional al iniciar pelea
+            on_stop_fight: Callback opcional al detener pelea
         """
         self.robot_comm = robot_comm
         self.current_frame = None
+        self.on_start_fight = on_start_fight
+        self.on_stop_fight = on_stop_fight
         
         # Flask
         self.app = Flask(__name__)
         self._setup_routes()
 
-        #Hand Control
+        # Hand Control
         self.Recognizer = HandControl()
     
     def update_frame(self, frame):
@@ -51,11 +55,15 @@ class Interface:
         for rid in self.robot_comm.robot_states:
             self.robot_comm.robot_states[rid] = "peleando"
         self.robot_comm.log("PELEA →", "Se inició la pelea")
+        if self.on_start_fight:
+            self.on_start_fight()
 
     def stop_fight_logic(self):
         for rid in self.robot_comm.robot_states:
             self.robot_comm.robot_states[rid] = "fuera de combate"
         self.robot_comm.log("PELEA →", "Se detuvo la pelea")
+        if self.on_stop_fight:
+            self.on_stop_fight()
 
     def _setup_routes(self):
         """Configura las rutas de Flask."""
