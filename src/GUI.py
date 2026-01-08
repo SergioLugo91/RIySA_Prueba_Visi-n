@@ -240,6 +240,11 @@ def vision_loop():
         
         # Actualizar interfaz web con el frame completo
         interface.update_frame(frame_combined)
+        # Hand Control
+        gesture = interface.Recognizer.recognize_gesture(frame_combined)
+        print(gesture)
+        if gesture == "Thumb_Up":
+            interface.start_fight_logic()
         
         # ===== MOSTRAR VENTANAS =====
         cv2.imshow("Sistema Integrado - Ring + Robots", frame_combined)
@@ -308,99 +313,119 @@ def vision_loop():
 
 
 if __name__ == "__main__":
-    try:
+    start_time = time.time()
+    # Configuración
+    CALIBRATION_PATH = "calibracion/cam_calib_data.npz"
+    CAM_ID = 0  # ID de la cámara
+    TARGET_FPS = 30.0
+    
+    # CONFIGURACIÓN DE MARCADORES POR ROBOT
+    ROBOT_MARKERS = {
+        0: [2, 3],    # Robot 0 usa ArUco IDs 2 y 3
+        1: [6, 7],    # Robot 1 usa ArUco IDs 4 y 5
+        2: [4, 5],    # Robot 2 usa ArUco IDs 6 y 7
+    }
+    
+    print("=" * 60)
+    print("SISTEMA INTEGRADO DE VISIÓN ARTIFICIAL - ROBÓTICA")
+    print("=" * 60)
+    print("\nConfiguración de marcadores por robot:")
+    for robot_id, marker_ids in ROBOT_MARKERS.items():
+        print(f"  Robot {robot_id}: ArUcos {marker_ids}")
+    
+    # Abrir la cámara PRIMERO
+    print("\nAbriendo cámara...")
+    cap = cv2.VideoCapture(CAM_ID, cv2.CAP_DSHOW)
+    
+    if not cap.isOpened():
+        print("ERROR: No se puede abrir la cámara")
+        sys.exit(1)
+    
+    print("✓ Cámara abierta correctamente")
+    
+    # Verificar que puede capturar
+    ret, test_frame = cap.read()
+    if not ret:
+        print("ERROR: La cámara se abrió pero no puede capturar frames")
+        cap.release()
+        sys.exit(1)
+    
+    print(f"✓ Frame de prueba capturado: {test_frame.shape}")
+    
+    # Crear detectores
+    print("\nInicializando detectores...")
+    ring_detector = RingDetector(
+        width=0.80,
+        height=0.80,
+        marker_length=0.14,
+        id_a=0,
+        id_b=1,
+        offset_a=(0.0, 0.03),
+        offset_b=(0.0, 0.05),
+        cam_id=CAM_ID,
+        target_fps=TARGET_FPS,
+        calibration_path=CALIBRATION_PATH
+    )
+    
+    robot_detector = ArUcoDetector(
+        marker_length=0.076,
+        cam_id=CAM_ID,
+        target_fps=TARGET_FPS,
+        calibration_path=CALIBRATION_PATH,
+        robot_markers=ROBOT_MARKERS
+    )
+    print("✓ Detectores creados")
+    
+    # Configurar comunicación con robots
+    print("\nConfigurando comunicación con robots...")
+    RobotCommInstance = RobotComm(ip="192.168.137.161", logfile="robot_datalog.txt")
+    RobotCommInstance.addRobot(0)
+    RobotCommInstance.addRobot(1)
+    RobotCommInstance.addRobot(2)
+    print("✓ Comunicación configurada")
+    
+    # Crear interfaz web
+    print("\nCreando interfaz web...")
+    def marcar_inicio_combate():
+        """Activa el envío periódico desde la interfaz/web/gesto."""
+        global inicio_combate, start_time
+        inicio_combate = True
+        ang1_array.clear()
+        ang2_array.clear()
         start_time = time.time()
-        # Configuración
-        CALIBRATION_PATH = "calibracion/cam_calib_data.npz"
-        CAM_ID = 0  # ID de la cámara
-        TARGET_FPS = 30.0
+        print("[INFO] Inicio de combate activado desde interfaz.")
+
+    def marcar_fin_combate():
+        """Desactiva el envío periódico desde la interfaz/web."""
+        global inicio_combate
+        inicio_combate = False
+        ang1_array.clear()
+        ang2_array.clear()
+        print("[INFO] Combate detenido desde interfaz.")
+
+    interface = Interface(
+        RobotCommInstance,
+        on_start_fight=marcar_inicio_combate,
+        on_stop_fight=marcar_fin_combate
+    )
+    print("✓ Interfaz creada")
+    
+    # Lanzar el bucle de visión en un thread separado
+    t_vision = threading.Thread(target=vision_loop, daemon=True)
+    t_vision.start()
+    print("✓ Thread de visión iniciado")
         
-        # CONFIGURACIÓN DE MARCADORES POR ROBOT
-        ROBOT_MARKERS = {
-            0: [2, 3],    # Robot 0 usa ArUco IDs 2 y 3
-            1: [6, 7],    # Robot 1 usa ArUco IDs 4 y 5
-            2: [4, 5],    # Robot 2 usa ArUco IDs 6 y 7
-        }
+    # Arrancar el servidor Flask en el hilo principal
+    print("\n" + "="*60)
+    print("Iniciando servidor web en http://localhost:5000")
+    print("Presiona ESC en la ventana de visión para detener")
+    print("="*60 + "\n")
+
+    try:
+        # Ejecutar Flask en un thread separado
+        interface.run_server(debug=False)
         
-        print("=" * 60)
-        print("SISTEMA INTEGRADO DE VISIÓN ARTIFICIAL - ROBÓTICA")
-        print("=" * 60)
-        print("\nConfiguración de marcadores por robot:")
-        for robot_id, marker_ids in ROBOT_MARKERS.items():
-            print(f"  Robot {robot_id}: ArUcos {marker_ids}")
-        
-        # Abrir la cámara PRIMERO
-        print("\nAbriendo cámara...")
-        cap = cv2.VideoCapture(CAM_ID, cv2.CAP_DSHOW)
-        
-        if not cap.isOpened():
-            print("ERROR: No se puede abrir la cámara")
-            sys.exit(1)
-        
-        print("✓ Cámara abierta correctamente")
-        
-        # Verificar que puede capturar
-        ret, test_frame = cap.read()
-        if not ret:
-            print("ERROR: La cámara se abrió pero no puede capturar frames")
-            cap.release()
-            sys.exit(1)
-        
-        print(f"✓ Frame de prueba capturado: {test_frame.shape}")
-        
-        # Crear detectores
-        print("\nInicializando detectores...")
-        ring_detector = RingDetector(
-            width=0.80,
-            height=0.80,
-            marker_length=0.14,
-            id_a=0,
-            id_b=1,
-            offset_a=(0.0, 0.03),
-            offset_b=(0.0, 0.05),
-            cam_id=CAM_ID,
-            target_fps=TARGET_FPS,
-            calibration_path=CALIBRATION_PATH
-        )
-        
-        robot_detector = ArUcoDetector(
-            marker_length=0.076,
-            cam_id=CAM_ID,
-            target_fps=TARGET_FPS,
-            calibration_path=CALIBRATION_PATH,
-            robot_markers=ROBOT_MARKERS
-        )
-        print("✓ Detectores creados")
-        
-        # Configurar comunicación con robots
-        print("\nConfigurando comunicación con robots...")
-        RobotCommInstance = RobotComm(ip="192.168.137.161", logfile="robot_datalog.txt")
-        RobotCommInstance.addRobot(0)
-        RobotCommInstance.addRobot(1)
-        RobotCommInstance.addRobot(2)
-        print("✓ Comunicación configurada")
-        
-        # Crear interfaz web
-        print("\nCreando interfaz web...")
-        interface = Interface(RobotCommInstance)
-        print("✓ Interfaz creada")
-        
-        # Lanzar el bucle de visión en un thread separado
-        t_vision = threading.Thread(target=vision_loop, daemon=True)
-        t_vision.start()
-        print("✓ Thread de visión iniciado")
-        
-        # Arrancar el servidor Flask en el hilo principal
-        print("\n" + "="*60)
-        print("Iniciando servidor web en http://localhost:5000")
-        print("Presiona ESC en la ventana de visión para detener")
-        print("="*60 + "\n")
-        
-        # ✅ Ejecutar Flask en un thread separado
-        t_flask = threading.Thread(target=lambda: interface.run_server(debug=False), daemon=True)
-        t_flask.start()
-        
-        # ✅ Esperar a que exit_event se señalice
+        # Esperar a que exit_event se señalice
         while not exit_event.is_set():
             time.sleep(0.1)
         
