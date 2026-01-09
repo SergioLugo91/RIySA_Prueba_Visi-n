@@ -191796,3 +191796,79 @@
 [2025-12-15 18:58:42] REGISTRO → Robot 0
 [2025-12-15 18:58:42] REGISTRO → Robot 1
 [2025-12-15 18:58:42] REGISTRO → Robot 2
+[2026-01-08 16:14:26] REGISTRO -> Robot 0
+[2026-01-08 16:14:26] REGISTRO -> Robot 1
+[2026-01-08 16:14:26] REGISTRO -> Robot 2
+[2026-01-08 16:16:06] PELEA → Se inició la pelea
+[2026-01-08 16:16:12] PELEA → Se detuvo la pelea
+[2026-01-08 16:18:34] REGISTRO -> Robot 0
+[2026-01-08 16:18:34] REGISTRO -> Robot 1
+[2026-01-08 16:18:34] REGISTRO -> Robot 2
+[2026-01-08 16:18:53] PELEA → Se inició la pelea
+[2026-01-08 16:18:53] PELEA → Se inició la pelea
+[2026-01-08 16:18:54] PELEA → Se inició la pelea
+[2026-01-08 16:18:54] PELEA → Se inició la pelea
+[2026-01-08 16:18:54] PELEA → Se inició la pelea
+[2026-01-08 16:18:54] PELEA → Se inició la pelea
+[2026-01-08 16:18:54] PELEA → Se inició la pelea
+[2026-01-08 16:18:54] PELEA → Se inició la pelea
+[2026-01-08 16:18:54] PELEA → Se inició la pelea
+[2026-01-08 16:18:54] PELEA → Se inició la pelea
+[2026-01-08 16:18:54] PELEA → Se inició la pelea
+[2026-01-08 16:18:54] PELEA → Se inició la pelea
+[2026-01-08 16:19:16] PELEA → Se detuvo la pelea
+[2026-01-08 16:34:04] REGISTRO -> Robot 0
+[2026-01-08 16:34:04] REGISTRO -> Robot 1
+[2026-01-08 16:34:04] REGISTRO -> Robot 2
+[2026-01-08 16:34:36] PELEA → Se inició la pelea
+[2026-01-08 16:37:02] PELEA → Se detuvo la pelea
+[2026-01-08 16:37:03] PELEA → Se inició la pelea
+[2026-01-08 16:39:45] REGISTRO -> Robot 0
+[2026-01-08 16:39:45] REGISTRO -> Robot 1
+[2026-01-08 16:39:45] REGISTRO -> Robot 2
+[2026-01-08 16:41:02] REGISTRO -> Robot 0
+[2026-01-08 16:41:02] REGISTRO -> Robot 1
+[2026-01-08 16:41:02] REGISTRO -> Robot 2
+[2026-01-08 16:43:41] REGISTRO -> Robot 0
+[2026-01-08 16:43:41] REGISTRO -> Robot 1
+[2026-01-08 16:43:41] REGISTRO -> Robot 2
+[2026-01-08 16:43:56] PELEA → Se inició la pelea
+[2026-01-08 16:43:57] PELEA → Se inició la pelea
+[2026-01-08 16:44:15] ENVIADO -> b'\x00\x00\x00\x00ff^\xc2\xd7\xa3\x8bB\x00'
+[2026-01-08 16:44:16] ENVIADO -> b'\x01\x00\x00\x00\x00\x80\x19C\xd7\xa3\x8bB\x00'
+[2026-01-08 16:44:18] ENVIADO -> b'\x00\x00\x00\x00\x00\x00\xa0@\xd7#\x92B\x00'
+[2026-01-08 16:44:18] ENVIADO -> b'\x01\x00\x00\x00\x9a\x99\xd9B\xd7#\x92B\x00'
+[2026-01-08 16:44:31] PELEA → Se inició la pelea
+[2026-01-08 16:44:32] PELEA → Se inició la pelea
+[2026-01-08 16:44:32] PELEA → Se inició la pelea
+[2026-01-08 16:44:32] PELEA → Se inició la pelea
+[2026-01-08 16:44:32] PELEA → Se inició la pelea
+[2026-01-08 16:45:38] PELEA → Se detuvo la pelea
+[2026-01-08 16:50:27] REGISTRO -> Robot 0
+[2026-01-08 16:50:27] REGISTRO -> Robot 1
+[2026-01-08 16:50:27] REGISTRO -> Robot 2
+[2026-01-08 16:50:35] ENVIADO -> b'\x00\x00\x00\x00ff\x16\xc13\xb3\x8bB\x00'
+[2026-01-08 16:50:36] ENVIADO -> b'\x01\x00\x00\x00\x00\x00\xdeB3\xb3\x8bB\x00'
+[2026-01-08 16:50:38] ENVIADO -> b'\x00\x00\x00\x00\x00\x00\x00@\xecQ\x86B\x00'
+[2026-01-08 16:50:38] ENVIADO -> b'\x01\x00\x00\x00ff\xe0B\xecQ\x86B\x00'
+[2026-01-08 16:50:41] ENVIADO -> b'\x00\x00\x00\x00\x9a\x99\x19@\x14\xaeVB\x00'
+[2026-01-08 16:50:41] ENVIADO -> b'\x01\x00\x00\x00\x00\x00\xa7B\x14\xaeVB\x00'
+[2026-01-08 16:50:46] ENVIADO -> b'\x00\x00\x00\x00\x9a\x99\xf9\xc0\x9a\x99IB\x00'
+[2026-01-08 16:50:47] ENVIADO -> b'\x01\x00\x00\x00ff6\xc1\x9a\x99IB\x00'
+[2026-01-08 16:50:49] ENVIADO -> b'\x00\x00\x00\x00\x9a\x99\x19?q=\x1dB\x00'
+[2026-01-08 16:50:50] ENVIADO -> b'\x01\x00\x00\x0033k\xc1q=\x1dB\x00'
+[2026-01-08 16:50:52] ENVIADO -> b'\x00\x00\x00\x00\x00\x00\x00\xc0\x00\x00\xd0A\x00'
+[2026-01-08 16:50:53] ENVIADO -> b'\x01\x00\x00\x00ff\x92\xc1\x00\x00\xd0A\x00'
+[2026-01-08 16:51:05] ENVIADO -> b'\x00\x00\x00\x0033\x1b\xc1R\xb8\xa2A\x00'
+[2026-01-08 16:51:05] ENVIADO -> b'\x01\x00\x00\x00\xcd\xcc\x80\xc1R\xb8\xa2A\x00'
+[2026-01-08 16:51:07] ENVIADO -> b'\x00\x00\x00\x00\x9a\x99\xa9\xc0\xd7\xa3\xb4A\x00'
+[2026-01-08 16:51:07] ENVIADO -> b'\x01\x00\x00\x00\x9a\x99\x85\xc1\xd7\xa3\xb4A\x00'
+[2026-01-08 16:51:10] ENVIADO -> b'\x00\x00\x00\x00\x9a\x99\xd9\xc0\xa4p\x9fA\x00'
+[2026-01-08 16:51:10] ENVIADO -> b'\x01\x00\x00\x00\x9a\x99I\xc1\xa4p\x9fA\x00'
+[2026-01-08 16:51:16] PELEA → Se inició la pelea
+[2026-01-08 16:51:17] PELEA → Se inició la pelea
+[2026-01-08 16:51:30] ENVIADO -> b'\x00\x00\x00\x0033S@{\x14\x9cA\x00'
+[2026-01-08 16:51:31] ENVIADO -> b'\x01\x00\x00\x0033s\xc0{\x14\x9cA\x00'
+[2026-01-08 16:51:33] ENVIADO -> b'\x00\x00\x00\x0033S@\x14\xae\xa1A\x00'
+[2026-01-08 16:51:33] ENVIADO -> b'\x01\x00\x00\x0033s\xc0\x14\xae\xa1A\x00'
+[2026-01-08 16:51:39] PELEA → Se inició la pelea

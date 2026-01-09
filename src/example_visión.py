@@ -353,7 +353,7 @@ if __name__ == "__main__":
         ring_detector = RingDetector(
             width=0.80,
             height=0.80,
-            marker_length=0.14,
+            marker_length=0.088,
             id_a=0,
             id_b=1,
             offset_a=(0.0, 0.03),
@@ -374,7 +374,7 @@ if __name__ == "__main__":
         
         # Configurar comunicación con robots
         print("\nConfigurando comunicación con robots...")
-        RobotCommInstance = RobotComm(ip="192.168.137.161", logfile="robot_datalog.txt")
+        RobotCommInstance = RobotComm(ip="192.168.137.84", logfile="robot_datalog.txt")
         RobotCommInstance.addRobot(0)
         RobotCommInstance.addRobot(1)
         RobotCommInstance.addRobot(2)
