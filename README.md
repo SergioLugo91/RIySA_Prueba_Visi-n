@@ -20,6 +20,9 @@ Este proyecto implementa un sistema completo de visión para un entorno de comba
 ```
 RIySA_Prueba_Visión/
 ├── src/                              # Código fuente principal
+│   ├── GUI.py                        # 🎯 PUNTO DE ENTRADA PRINCIPAL
+│   ├── App.py                        # Clase Interface para interfaz web Flask
+│   │
 │   ├── detectors/                    # Módulo de detección
 │   │   ├── aruco_detector.py         # Detector de marcadores ArUco (poses 3D, robots)
 │   │   └── ring_detector.py          # Detector del ring y homografía
@@ -28,17 +31,23 @@ RIySA_Prueba_Visión/
 │   │   └── median_corner_filter.py   # Filtro de mediana para suavizar ruido de detección
 │   │
 │   ├── models/                       # Modelos de datos
-│   │   └── ubot.py                   # Clase Ubot (dataclass para info de robots)
+│   │   ├── ubot.py                   # Clase Ubot (dataclass para info de robots)
+│   │   └── gesture_recognizer.task   # Modelo de MediaPipe para reconocimiento de gestos
 │   │
-│   ├── RobPCComm/                    # Módulo de comunicación
+│   ├── utils/                        # Utilidades
+│   │   └── hand_control.py           # Control por gestos con MediaPipe
+│   │
+│   ├── RobPCComm/                    # Módulo de comunicación (submódulo Git)
 │   │   └── ComRobotLib/
-│   │       ├── PCComm.py             # TCP/IP con robots + Interfaz Flask web
-│   │       └── templates/
-│   │           └── index.html        # Interfaz web HTML
+│   │       ├── PCComm.py             # TCP/IP con robots
+│   │       └── ...
+│   │
+│   ├── templates/                    # Plantillas HTML para interfaz web
+│   │   └── index.html                # Interfaz web principal
 │   │
 │   ├── combat/                       # Ejemplos de combate
 │   │
-│   ├── example_visión.py             # 🎯 PUNTO DE ENTRADA PRINCIPAL
+│   ├── example_visión.py             # ⚡ EJEMPLO DE REFERENCIA - Lógica completa de visión
 │   ├── example_transformacion.py     # Ejemplo de transformaciones geométricas
 │   └── __init__.py
 │
@@ -47,6 +56,9 @@ RIySA_Prueba_Visión/
 │   ├── cam_calib_data.npz            # Parámetros intrínsecos de la cámara
 │   ├── calibrationSession.mat        # Sesión de calibración MATLAB
 │   └── CaptCalib*/                   # Conjuntos de imágenes para calibración
+│
+├── tests/                            # Tests
+│   └── test_interface.py             # Tests de la interfaz
 │
 ├── requirements.txt                  # Dependencias del proyecto
 ├── robot_datalog.txt                 # Log de datos de robots
@@ -82,27 +94,28 @@ RIySA_Prueba_Visión/
              │                     │
              ▼                     ▼
     ┌─────────────────────────────────────┐
-    │  example_visión.py (BUCLE PRINCIPAL)│
+    │  GUI.py (BUCLE PRINCIPAL)           │
     ├─────────────────────────────────────┤
     │• Integra datos de detectores        │
     │• Calcula ángulos y distancias       │
     │• Gestiona lógica de combate         │
+    │• Reconoce gestos (HandControl)      │
     └──────────────┬──────────────────────┘
                    │
-                   │                    
-                   ▼       
-            ┌──────────────┐    
-            │ RobotComm    │    
-            │ (TCP/IP)     │   
-            ├──────────────┤  
-            │• Envía datos │   
-            │  a robots    │   
-            │• Recibe      │  
-            │  respuestas  │
-            └──────────────┘    
-                    │
-                    ▼
-                ROBOTS FÍSICOS
+                   ├──────────────┐                    
+                   ▼              ▼       
+            ┌──────────────┐  ┌──────────────┐
+            │ RobotComm    │  │  Interface   │
+            │ (TCP/IP)     │  │  (Flask Web) │
+            ├──────────────┤  ├──────────────┤
+            │• Envía datos │  │• Streaming   │
+            │  a robots    │  │• Control web │
+            │• Recibe      │  │• Estado de   │
+            │  respuestas  │  │  robots      │
+            └──────┬───────┘  └──────────────┘
+                   │
+                   ▼
+               ROBOTS FÍSICOS
 ```
 
 ---
@@ -164,6 +177,8 @@ RIySA_Prueba_Visión/
 
 ### 4. **Comunicación** (`src/RobPCComm/`)
 
+Este módulo se encuentra como submódulo Git externo.
+
 #### `PCComm.py`
 - **Clases**:
   - **`RobotComm`**: Maneja comunicación TCP/IP con robots
@@ -171,16 +186,57 @@ RIySA_Prueba_Visión/
     - Recibe confirmaciones de robots
     - Gestiona múltiples conexiones
 
-### 5. **Punto de Entrada Principal**
+### 5. **Interfaz Web** (`src/`)
 
-#### `example_visión.py` 🎯
+#### `App.py`
+- **Clase**: `Interface`
+- **Funcionalidad**:
+  - Gestiona la interfaz web Flask
+  - Proporciona streaming de video en tiempo real
+  - Control de inicio/fin de combate desde web
+  - Integra reconocimiento de gestos para control
+- **Rutas web**:
+  - `/`: Página principal con estados de robots
+  - `/video_feed`: Stream de video
+  - `/start`: Iniciar combate
+  - `/stop`: Detener combate
+
+### 6. **Control por Gestos** (`src/utils/`)
+
+#### `hand_control.py`
+- **Clase**: `HandControl`
+- **Funcionalidad**:
+  - Reconocimiento de gestos usando MediaPipe
+  - Permite control del sistema mediante gestos de mano
+  - Integrado con la interfaz para iniciar combate con gesto "Thumb_Up"
+
+### 7. **Punto de Entrada Principal**
+
+#### `GUI.py` 🎯
 - **Función**: `vision_loop()`
   - Bucle principal que procesa frames en tiempo real
-  - Integra datos de detectores
+  - Integra datos de detectores (ArUco y Ring)
   - Calcula ángulos y distancias entre robots
   - Gestiona la lógica de combate
   - Envía datos a robots mediante TCP/IP
   - Actualiza interfaz web con video stream
+  - Reconocimiento de gestos para control
+- **Características**:
+  - Sistema completo integrado
+  - Multithreading para visión y servidor web
+  - Control por teclado, web y gestos
+  - Logging de estados de robots
+
+### 8. **Ejemplos de Referencia**
+
+#### `example_visión.py` ⚡
+- **Código de ejemplo** que demuestra la implementación completa del sistema de visión
+- Incluye toda la lógica de:
+  - Detección de marcadores ArUco
+  - Cálculo de propiedades de robots (posición, ángulo, distancia)
+  - Envío de datos a robots
+  - Integración de ring y robots
+- Útil como referencia para entender la arquitectura del sistema
 
 ---
 
@@ -227,21 +283,35 @@ pip install -r requirements.txt
 
 ### 3. Ejecutar la Aplicación
 ```bash
-python src/example_visión.py
+python src/GUI.py
 ```
 
-**Interfaz web**: http://localhost:5000
+**Controles disponibles**:
+- **Teclado**:
+  - `ESC`: Salir del sistema
+  - `r`: Resetear filtro de esquinas
+  - `p`: Imprimir estado de robots
+  - `s`: Iniciar envío automático de datos
+  - `ENTER`: Envío manual de datos
+- **Web**: http://localhost:5000
+  - Botones para iniciar/detener combate
+  - Visualización de estados de robots
+  - Stream de video en tiempo real
+- **Gestos**: 
+  - Pulgar arriba (Thumb_Up) para iniciar combate
 
 ---
 
 ## 📊 Flujo de Ejecución
 
 ```
-1. Inicialización
+1. Inicialización (GUI.py)
    ├─ Cargar parámetros de calibración
    ├─ Inicializar ArUcoDetector
    ├─ Inicializar RingDetector
-   └─ Inicializar RobotComm e Interface Flask
+   ├─ Inicializar RobotComm
+   ├─ Inicializar Interface Flask
+   └─ Inicializar HandControl (reconocimiento de gestos)
 
 2. Bucle Principal (vision_loop)
    ├─ Capturar frame de cámara
@@ -249,18 +319,35 @@ python src/example_visión.py
    ├─ Procesar robots (detectar ArUco, calcular poses 3D)
    ├─ Calcular ángulos y distancias
    ├─ Aplicar lógica de combate
-   ├─ Enviar datos a robots (TCP/IP)
+   ├─ Reconocer gestos en el frame
+   ├─ Enviar datos a robots (TCP/IP) si está habilitado
    ├─ Actualizar interfaz web
    └─ Mostrar información en pantalla
 
 3. Comunicación Paralela
-   ├─ Thread de recepción de datos de robots
-   └─ Thread principal de visión
+   ├─ Thread de visión principal
+   ├─ Thread de servidor Flask (interfaz web)
+   └─ Thread de recepción de datos de robots
 ```
 
 ---
 
 ## 🚀 Ejemplo de Uso
+
+### Uso básico desde GUI.py (aplicación principal)
+
+```python
+# El archivo GUI.py es el punto de entrada principal
+# Ejecutar: python src/GUI.py
+
+# La aplicación inicializa todos los componentes automáticamente:
+# - Detectores de ArUco y Ring
+# - Comunicación con robots
+# - Interfaz web Flask
+# - Reconocimiento de gestos
+```
+
+### Uso de módulos individuales (para desarrollo/testing)
 
 ```python
 from detectors.aruco_detector import ArUcoDetector
@@ -287,12 +374,21 @@ for robot_id, robot_pose in robot_data.items():
     print(f"Robot {robot_id}: posición={robot_pose['position']}")
 ```
 
+### Referencia de implementación completa
+
+Ver `src/example_visión.py` para un ejemplo completo de cómo integrar todos los componentes del sistema de visión, incluyendo:
+- Detección de marcadores y robots
+- Cálculo de propiedades (ángulos, distancias)
+- Envío de datos a robots
+- Gestión del ring de combate
+
 ---
 
 ## 📝 Ejemplos Adicionales
 
-- `example_transformacion.py`: Ejemplos de transformaciones geométricas
-- `example_transformacion`: Directorio con más ejemplos
+- **`example_visión.py`**: Ejemplo completo de referencia que muestra toda la lógica de visión, cálculo de propiedades de robots y envío de datos. Útil para entender la arquitectura del sistema.
+- **`example_transformacion.py`**: Ejemplos de transformaciones geométricas
+- **`App.py`**: Puede ejecutarse de forma independiente para probar la interfaz web sin el sistema completo de visión
 
 ---
 
@@ -300,8 +396,9 @@ for robot_id, robot_pose in robot_data.items():
 
 - **OpenCV**: Detección de marcadores ArUco y procesamiento de video
 - **NumPy**: Operaciones matriciales y cálculos geométricos
-- **Flask**: Interfaz web para monitoreo
+- **Flask**: Interfaz web para monitoreo y control
 - **PySerial**: Comunicación con microcontroladores
+- **MediaPipe**: Reconocimiento de gestos para control por manos
 
 ---
 
@@ -312,6 +409,8 @@ for robot_id, robot_pose in robot_data.items():
 - **Multithreading**: Separación de visión, comunicación e interfaz web
 - **Comunicación**: TCP/IP a puerto personalizado
 - **Frecuencia**: 30 FPS objetivo para procesamiento
+- **Control**: Soporta teclado, interfaz web y reconocimiento de gestos
+- **Submódulos**: RobPCComm es un submódulo Git externo
 ---
 
 **Última actualización**: Enero 2026
